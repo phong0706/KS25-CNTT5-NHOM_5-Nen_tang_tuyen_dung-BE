@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users(
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
-    role ENUM('candidate', 'employer', 'admin') NOT NULL DEFAULT 'candidate',  -- ✅ Sửa từ 'cadidate'
+    role ENUM('candidate', 'employer', 'admin') NOT NULL DEFAULT 'candidate',  
     avatar_url VARCHAR(500),
     is_active BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS users(
     INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Seed data: Password cho tất cả là "password123" (hash bcrypt)
 INSERT INTO users (email, password, full_name, phone, role, is_active, is_verified) VALUES
 -- Admin
 ('admin@tuyendung.com', 'admin123"', 'System Admin', '0901234567', 'admin', TRUE, TRUE),
