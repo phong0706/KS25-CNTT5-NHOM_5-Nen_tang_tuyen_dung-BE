@@ -1,4 +1,4 @@
--- Tạo database app_db + bảng items + dữ liệu mẫu.
+-- Tạo database app_db + bảng users + dữ liệu mẫu.
 -- Cách chạy bằng MySQL Workbench:
 --   File > Open SQL Script... > chọn file này > bấm nút tia sét (Execute) > Refresh ô SCHEMAS.
 -- Chạy lại nhiều lần không lỗi (đã có thì bỏ qua), chỉ là dữ liệu mẫu sẽ bị thêm lặp.
@@ -9,15 +9,41 @@ CREATE DATABASE IF NOT EXISTS app_db
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE app_db;
 
-CREATE TABLE IF NOT EXISTS items (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  name        VARCHAR(255) NOT NULL,
-  description TEXT NULL,
-  price       DECIMAL(12, 2) NOT NULL DEFAULT 0,
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- Xóa bảng cũ nếu muốn reset (bỏ comment dòng dưới)
+ -- DROP TABLE IF EXISTS users;
+
+CREATE TABLE IF NOT EXISTS users(
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    role ENUM('candidate', 'employer', 'admin') NOT NULL DEFAULT 'candidate',  
+    avatar_url VARCHAR(500),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_email (email),
+    INDEX idx_role (role),
+    INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO items (name, description, price) VALUES
-  ('Cơm rang dưa bò', 'Món mẫu để kiểm tra API', 45000),
-  ('Trà đá', 'Dữ liệu mẫu số 2', 5000);
+INSERT INTO users (email, password, full_name, phone, role, is_active, is_verified) VALUES
+-- Admin
+('admin@tuyendung.com', 'admin123"', 'System Admin', '0901234567', 'admin', TRUE, TRUE),
+
+-- Nhà tuyển dụng
+('admin@tuyendung.com', 'admin123@', 'Nguyễn Tấn Phong', '0912345678', 'employer', TRUE, TRUE),
+('hr1@tuyendung.com', 'ahr1@', 'Trần Thị Bình', '0923456789', 'employer', TRUE, TRUE),
+('hr2@tuyendung.com', 'hr2@', 'Lê Văn Cường', '0934567890', 'employer', TRUE, FALSE),
+
+-- Ứng viên
+('ungvien1@gmail.com', 'ungvien1@', 'Phạm Minh Đức', '0945678901', 'candidate', TRUE, TRUE),
+('ungvien2@gmail.com', 'ungdung2@', 'Hoàng Thu Hà', '0956789012', 'candidate', TRUE, TRUE),
+('ungvien3@gmail.com', 'ungvien3@', 'Vũ Tuấn Kiệt', '0967890123', 'candidate', TRUE, FALSE),
+('ungvien4@gmail.com', 'ungvien4@', 'Đỗ Lan Anh', '0978901234', 'candidate', FALSE, TRUE)
+ON DUPLICATE KEY UPDATE email=email; -- Không thêm trùng nếu chạy lại
+
+SELECT * FROM users;
