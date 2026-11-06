@@ -38,12 +38,28 @@ INSERT INTO users (email, password, full_name, phone, role, is_active, is_verifi
 ('admin@tuyendung.com', 'admin123@', 'Nguyễn Tấn Phong', '0912345678', 'employer', TRUE, TRUE),
 ('hr1@tuyendung.com', 'ahr1@', 'Trần Thị Bình', '0923456789', 'employer', TRUE, TRUE),
 ('hr2@tuyendung.com', 'hr2@', 'Lê Văn Cường', '0934567890', 'employer', TRUE, FALSE),
+('hr3@tuyendung.com', 'hr3@', 'Lê Văn Liêm', '0932562890', 'employer', TRUE, FALSE),
+('hr4tuyendung.com', 'hr4@', 'Lê Quang Hùng', '0961738289', 'employer', TRUE, FALSE),
+('hr5@tuyendung.com', 'hr5@', 'Nguyễn Thị Tươi', '0934567890', 'employer', TRUE, FALSE),
+
 
 -- Ứng viên
 ('ungvien1@gmail.com', 'ungvien1@', 'Phạm Minh Đức', '0945678901', 'candidate', TRUE, TRUE),
 ('ungvien2@gmail.com', 'ungdung2@', 'Hoàng Thu Hà', '0956789012', 'candidate', TRUE, TRUE),
 ('ungvien3@gmail.com', 'ungvien3@', 'Vũ Tuấn Kiệt', '0967890123', 'candidate', TRUE, FALSE),
-('ungvien4@gmail.com', 'ungvien4@', 'Đỗ Lan Anh', '0978901234', 'candidate', FALSE, TRUE)
+('ungvien4@gmail.com', 'ungvien4@', 'Đỗ Lan Anh', '0978901234', 'candidate', FALSE, TRUE),
+('ungvien5@gmail.com', 'ungvien5@', 'Nguyễn Văn An', '0989012345', 'candidate', TRUE, TRUE),
+('ungvien6@gmail.com', 'ungvien6@', 'Trần Thị Mai', '0901234567', 'candidate', TRUE, FALSE),
+('ungvien7@gmail.com', 'ungvien7@', 'Lê Hoàng Nam', '0912345678', 'candidate', FALSE, TRUE),
+('ungvien8@gmail.com', 'ungvien8@', 'Phan Thanh Tùng', '0923456789', 'candidate', TRUE, TRUE),
+('ungvien9@gmail.com', 'ungvien9@', 'Bùi Thị Hương', '0934567890', 'candidate', FALSE, FALSE),
+('ungvien10@gmail.com', 'ungvien10@', 'Đặng Quốc Anh', '0941234567', 'candidate', TRUE, TRUE),
+('ungvien11@gmail.com', 'ungvien11@', 'Trịnh Bảo Ngọc', '0952345678', 'candidate', TRUE, FALSE),
+('ungvien12@gmail.com', 'ungvien12@', 'Ngô Gia Huy', '0963456789', 'candidate', TRUE, TRUE),
+('ungvien13@gmail.com', 'ungvien13@', 'Dương Thảo Linh', '0974567890', 'candidate', FALSE, TRUE),
+('ungvien14@gmail.com', 'ungvien14@', 'Lý Minh Trí', '0985678901', 'candidate', TRUE, TRUE),
+('ungvien15@gmail.com', 'ungvien15@', 'Nguyễn Khánh Vân', '0996789012', 'candidate', TRUE, FALSE)
+
 ON DUPLICATE KEY UPDATE email=email; -- Không thêm trùng nếu chạy lại
 
 SELECT * FROM users;
