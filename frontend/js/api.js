@@ -22,7 +22,8 @@ class ApiError extends Error {
 // Instance axios dùng chung: mọi request tự nối thêm baseURL phía trước
 const http = axios.create({
   baseURL: CONFIG.API_BASE_URL,
-  timeout: 10000, // quá 10 giây không phản hồi thì báo lỗi
+  timeout: 10000, // quá 1
+  // 0 giây không phản hồi thì báo lỗi
   headers: { "Content-Type": "application/json" },
 });
 
