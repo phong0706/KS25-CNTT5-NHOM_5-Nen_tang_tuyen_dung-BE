@@ -3,3 +3,4 @@
 from app.models.item import Item  # noqa: F401
 from app.models.catalog import Industry, Location, Skill
 from app.models.report import Report, ReportStatus
+from app.models.company import Company, CompanyStatus  # noqa: F401
