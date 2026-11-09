@@ -1,10 +1,10 @@
-# Import mọi model ở đây để Base.metadata.create_all() nhận diện bảng.
-from app.models.item import Item
-from app.models.candidate_profile import CandidateProfile
-from app.models.company import Company
-from app.models.industry import Industry
-from app.models.location import Location
-from app.models.skill import Skill
-from app.models.job import Job
-from app.models.job_skill import JobSkill
-from app.models.saved_job import SavedJob
+# Import mọi model ở đây để Base.metadata.create_all() "nhìn thấy" và tạo bảng.
+# Thêm model mới -> nhớ thêm 1 dòng import vào file này.
+from app.models.item import Item  # noqa: F401
+from app.models.catalog import Industry, Location, Skill
+from app.models.report import Report, ReportStatus
+from app.models.candidate import CandidateProfile, CandidateSkill, Experience, Education, Cv
+from app.models.company import Company, CompanyStatus  # noqa: F401
+from app.models.job import Job  # noqa: F401
+from app.models.job_skill import JobSkill  # noqa: F401
+from app.models.saved_job import SavedJob  # noqa: F401
