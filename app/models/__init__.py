@@ -5,3 +5,6 @@ from app.models.catalog import Industry, Location, Skill
 from app.models.report import Report, ReportStatus
 from app.models.candidate import CandidateProfile, CandidateSkill, Experience, Education, Cv
 from app.models.company import Company, CompanyStatus  # noqa: F401
+from app.models.job import Job  # noqa: F401
+from app.models.job_skill import JobSkill  # noqa: F401
+from app.models.saved_job import SavedJob  # noqa: F401
