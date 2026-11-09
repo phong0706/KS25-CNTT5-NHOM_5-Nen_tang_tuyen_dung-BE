@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError
 from app import models
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import health, items, jobs
+from app.routers import auth, health, items, jobs
 
 
 @asynccontextmanager
@@ -39,9 +39,5 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
-
-
-@app.get("/")
-def root():
-    return {"message": f"{settings.APP_NAME} đang chạy. Xem tài liệu API tại /docs"}
