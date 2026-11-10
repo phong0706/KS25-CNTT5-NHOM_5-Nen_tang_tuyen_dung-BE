@@ -1,12 +1,10 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.catalog import Industry, Location, Skill
 from app.models.company import Company
-from app.models.industry import Industry
 from app.models.job import Job
 from app.models.job_skill import JobSkill
-from app.models.location import Location
-from app.models.skill import Skill
 
 
 def search_jobs(
