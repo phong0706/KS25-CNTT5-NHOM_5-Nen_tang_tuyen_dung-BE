@@ -9,3 +9,6 @@ from app.models.company import Company, CompanyStatus  # noqa: F401
 from app.models.job import Job  # noqa: F401
 from app.models.job_skill import JobSkill  # noqa: F401
 from app.models.saved_job import SavedJob  # noqa: F401
+from app.models.application import Application, ApplicationStatus  # noqa: F401
+from app.models.application_status_history import ApplicationStatusHistory  # noqa: F401
+from app.models.interview import Interview  # noqa: F401
