@@ -2,10 +2,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.catalog import Industry, Location
 from app.models.company import Company
-from app.models.industry import Industry
 from app.models.job import Job
-from app.models.location import Location
 from app.models.saved_job import SavedJob
 
 
