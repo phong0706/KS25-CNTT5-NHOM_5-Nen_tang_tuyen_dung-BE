@@ -1,38 +1,52 @@
-"""Điểm khởi động của backend.
+"""Diem khoi dong cua backend.
 
-Chạy:  uvicorn app.main:app --reload
-Tài liệu API tự sinh: http://127.0.0.1:8000/docs
+Chay: uvicorn app.main:app --reload
+Tai lieu API: http://127.0.0.1:8000/docs
 """
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 
-from app import models  # noqa: F401 - import để SQLAlchemy biết các bảng
+from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import health, items, industries, locations, skills
+
+# Đã gộp đầy đủ các router từ cả 2 nhánh
+from app.routers import auth, company, cv, health, industries, items, jobs, locations, skills
+
+# Fix encoding cho Windows console (tranh loi UnicodeEncodeError voi tieng Viet)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tự tạo các bảng còn thiếu khi server khởi động (bảng đã có thì bỏ qua).
-    # Lưu ý: create_all KHÔNG sửa bảng đã tồn tại. Đổi cột -> sửa bằng SQL hoặc xoá bảng tạo lại.
     try:
         Base.metadata.create_all(bind=engine)
-        print(f"[DB] Đã kết nối MySQL {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
+        print(f"[DB] Ket noi MySQL thanh cong {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
     except OperationalError as error:
-        print("[DB] KHÔNG kết nối được MySQL! Kiểm tra MySQL đã bật chưa và file .env.")
+        print("[DB] KHONG ket noi duoc MySQL! Kiem tra MySQL va file .env.")
         if "Unknown database" in str(error.orig):
-            print("[DB] Chưa có database -> mở MySQL Workbench, chạy file sql/init.sql")
-        print(f"[DB] Chi tiết: {error.orig}")
+            print("[DB] Chua co database -> chay file sql/init.sql")
+        print(f"[DB] Chi tiet: {error.orig}")
+        
+    # Tạo thư mục upload nếu chưa có
+    upload_path = Path(settings.UPLOAD_DIR)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    print(f"[Upload] Thu muc luu anh/CV: {upload_path.resolve()}")
+
     yield
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
-# CORS: cho phép trang FE (khác cổng/khác domain) gọi được API này
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -40,9 +54,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mọi API đều bắt đầu bằng /api. Thêm router mới thì include ở đây.
+# Phục vụ file tĩnh
+app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
+
+# Đăng ký toàn bộ router
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(cv.router, prefix="/api")
+app.include_router(company.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 app.include_router(industries.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
@@ -50,4 +71,4 @@ app.include_router(skills.router, prefix="/api")
 
 @app.get("/")
 def root():
-    return {"message": f"{settings.APP_NAME} đang chạy. Xem tài liệu API tại /docs"}
+    return {"message": f"{settings.APP_NAME} is running. API docs at /docs"}
