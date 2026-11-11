@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Chuỗi các origin cách nhau bằng dấu phẩy, hoặc "*"
     CORS_ORIGINS: str = "*"
 
+    # CV file upload settings
+    CV_UPLOAD_DIR: str = "storage/cvs"  # Thư mục lưu CV (ngoài public)
+    CV_MAX_SIZE_MB: int = 5  # Kích thước tối đa 5MB
+    CV_MAX_FILES_PER_CANDIDATE: int = 3  # Tối đa 3 CV mỗi ứng viên
+
     @property
     def database_url(self) -> str:
         # mysql+pymysql://user:password@host:port/database
