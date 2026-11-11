@@ -30,6 +30,12 @@ CV_MAX_FILES_PER_CANDIDATE: int = 3 # Tối đa 3 CV mỗi ứng viên
 JWT_SECRET: str = "CHANGE_ME_USE_RANDOM_32_CHARS_AT_LEAST"
 JWT_EXPIRE_MINUTES: int = 60 * 24 # 1 ngày
 
+    # Upload ảnh (logo / ảnh bìa công ty)
+    # Thư mục lưu file upload (tương đối so với thư mục chạy uvicorn)
+    UPLOAD_DIR: str = "uploads"
+    # Dung lượng tối đa mỗi file (bytes). Mặc định 2 MB.
+    MAX_UPLOAD_BYTES: int = 2 * 1024 * 1024  # 2 MB
+
     @property
     def database_url(self) -> str:
         # mysql+pymysql://user:password@host:port/database
@@ -45,3 +51,4 @@ JWT_EXPIRE_MINUTES: int = 60 * 24 # 1 ngày
 
 
 settings = Settings()
+

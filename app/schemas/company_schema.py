@@ -43,10 +43,27 @@ class CompanyUpdate(BaseModel):
     status: CompanyStatus | None = Field(default=None, examples=[CompanyStatus.VERIFIED])
 
 
+class CompanyProfileUpdate(BaseModel):
+    """Dữ liệu employer tự sửa hồ sơ công ty của mình.
+
+    KHÔNG cho employer tự đổi `status` (chỉ admin mới đổi) và `owner_id`.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=255, examples=["FPT Software"])
+    tax_code: str | None = Field(default=None, max_length=50, examples=["0301363748"])
+    company_size: str | None = Field(default=None, max_length=50, examples=["1000+"])
+    industry_id: int | None = Field(default=None, examples=[1])
+    address: str | None = Field(default=None, max_length=500, examples=["17 Tố Hữu, Hà Nội"])
+    website: str | None = Field(default=None, max_length=255, examples=["https://fpt.com"])
+    description: str | None = Field(default=None, examples=["Công ty hàng đầu về CNTT"])
+
+
 class CompanyResponse(CompanyBase):
     """Dữ liệu API trả về cho FE (có kèm theo ID và thời gian)."""
 
     id: int
+    employer_id: int
+    is_draft: bool
     created_at: datetime
     updated_at: datetime
 
