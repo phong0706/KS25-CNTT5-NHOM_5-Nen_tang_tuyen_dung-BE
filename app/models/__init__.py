@@ -12,3 +12,4 @@ from app.models.saved_job import SavedJob  # noqa: F401
 from app.models.application import Application, ApplicationStatus  # noqa: F401
 from app.models.application_status_history import ApplicationStatusHistory  # noqa: F401
 from app.models.interview import Interview  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
