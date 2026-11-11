@@ -21,9 +21,14 @@ class Settings(BaseSettings):
     # Chuỗi các origin cách nhau bằng dấu phẩy, hoặc "*"
     CORS_ORIGINS: str = "*"
 
-    # JWT
-    JWT_SECRET: str = "CHANGE_ME_USE_RANDOM_32_CHARS_AT_LEAST"
-    JWT_EXPIRE_MINUTES: int = 60 * 24  # 1 ngày
+# CV file upload settings
+CV_UPLOAD_DIR: str = "storage/cvs" # Thư mục lưu CV (ngoài public)
+CV_MAX_SIZE_MB: int = 5 # Kích thước tối đa 5MB
+CV_MAX_FILES_PER_CANDIDATE: int = 3 # Tối đa 3 CV mỗi ứng viên
+
+# JWT
+JWT_SECRET: str = "CHANGE_ME_USE_RANDOM_32_CHARS_AT_LEAST"
+JWT_EXPIRE_MINUTES: int = 60 * 24 # 1 ngày
 
     @property
     def database_url(self) -> str:

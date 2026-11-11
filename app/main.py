@@ -1,5 +1,5 @@
 """Diem khoi dong cua backend.
-
+ 
 Chay: uvicorn app.main:app --reload
 Tai lieu API: http://127.0.0.1:8000/docs
 """
@@ -13,7 +13,7 @@ from sqlalchemy.exc import OperationalError
 from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import auth, health, items, jobs
+from app.routers import auth, cv, health, items, jobs
 
 # Fix encoding cho Windows console (tranh loi UnicodeEncodeError voi tieng Viet)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -47,10 +47,10 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(cv.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 
 
 @app.get("/")
 def root():
     return {"message": f"{settings.APP_NAME} is running. API docs at /docs"}
-
