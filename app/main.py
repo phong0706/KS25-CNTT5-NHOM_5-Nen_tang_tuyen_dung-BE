@@ -5,15 +5,17 @@ Tai lieu API: http://127.0.0.1:8000/docs
 """
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 
 from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import auth, health, items, jobs
+from app.routers import auth, company, health, items, jobs
 
 # Fix encoding cho Windows console (tranh loi UnicodeEncodeError voi tieng Viet)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -32,6 +34,12 @@ async def lifespan(app: FastAPI):
         if "Unknown database" in str(error.orig):
             print("[DB] Chua co database -> chay file sql/init.sql")
         print(f"[DB] Chi tiet: {error.orig}")
+
+    # Tạo thư mục upload nếu chưa có
+    upload_path = Path(settings.UPLOAD_DIR)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    print(f"[Upload] Thu muc luu anh: {upload_path.resolve()}")
+
     yield
 
 
@@ -44,10 +52,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Tạo thư mục upload ngay khi khởi động app (StaticFiles cần thư mục tồn tại sẵn)
+_upload_path = Path(settings.UPLOAD_DIR)
+_upload_path.mkdir(parents=True, exist_ok=True)
+
+# Phục vụ file tĩnh (ảnh upload) tại /uploads/...
+app.mount("/uploads", StaticFiles(directory=str(_upload_path)), name="uploads")
+
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(company.router, prefix="/api")
 
 
 @app.get("/")
