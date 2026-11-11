@@ -15,7 +15,21 @@ from sqlalchemy.exc import OperationalError
 from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import auth, company, cv, health, items, jobs, applications
+
+# Đã gộp đầy đủ các router từ cả 2 nhánh
+from app.routers import (
+    applications,
+    auth,
+    candidate_profile,
+    company,
+    cv,
+    health,
+    industries,
+    items,
+    jobs,
+    locations,
+    skills,
+)
 
 # Fix encoding cho Windows console (tranh loi UnicodeEncodeError voi tieng Viet)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -56,12 +70,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Tạo thư mục static trước khi mount (để tránh lỗi khi server khởi động)
-Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
-
-# Phục vụ file tĩnh (nếu nhánh company của bạn có sử dụng StaticFiles)
+# Phục vụ file tĩnh (thư mục đã được tạo trong lifespan)
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 
+# Đăng ký toàn bộ router
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
@@ -69,6 +81,10 @@ app.include_router(cv.router, prefix="/api")
 app.include_router(company.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(applications.router, prefix="/api")
+app.include_router(candidate_profile.router, prefix="/api")
+app.include_router(industries.router, prefix="/api")
+app.include_router(locations.router, prefix="/api")
+app.include_router(skills.router, prefix="/api")
 
 
 @app.get("/")
