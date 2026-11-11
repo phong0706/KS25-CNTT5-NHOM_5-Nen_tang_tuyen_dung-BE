@@ -11,3 +11,7 @@ env/
 # IDE
 .vscode/
 .idea/
+
+# File upload (ảnh logo, ảnh bìa công ty)
+uploads/
+
