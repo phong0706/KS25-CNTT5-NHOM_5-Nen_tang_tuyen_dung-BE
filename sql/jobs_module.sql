@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   salary_min       DECIMAL(15,2) NULL,
   salary_max       DECIMAL(15,2) NULL,
   is_negotiable    BOOLEAN       NOT NULL DEFAULT FALSE,
+  currency         VARCHAR(10)   NOT NULL DEFAULT 'VND',
   quantity         INT           NOT NULL DEFAULT 1,
   description      TEXT          NOT NULL,
   requirements     TEXT          NULL,
@@ -130,6 +131,20 @@ CREATE TABLE IF NOT EXISTS jobs (
   INDEX ix_jobs_location_id (location_id),
   INDEX ix_jobs_job_type    (job_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add currency to an existing jobs table when this module SQL is rerun.
+SET @jobs_currency_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'jobs' AND COLUMN_NAME = 'currency'
+);
+SET @jobs_currency_ddl = IF(
+  @jobs_currency_exists = 0,
+  'ALTER TABLE jobs ADD COLUMN currency VARCHAR(10) NOT NULL DEFAULT ''VND'' AFTER is_negotiable',
+  'SELECT 1'
+);
+PREPARE jobs_currency_stmt FROM @jobs_currency_ddl;
+EXECUTE jobs_currency_stmt;
+DEALLOCATE PREPARE jobs_currency_stmt;
 
 -- ============================================================
 -- BẢNG job_skills
