@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
 CREATE TABLE IF NOT EXISTS candidate_skills (
     id INT AUTO_INCREMENT PRIMARY KEY,
     profile_id INT NOT NULL,
-    skill_id BIGINT NULL COMMENT 'Tham chiếu đến bảng skills (nullable)',
+    skill_id INT NULL COMMENT 'Tham chiếu đến bảng skills (nullable)',
     skill_name VARCHAR(255) NOT NULL,
     level VARCHAR(50) NULL COMMENT 'Beginner / Intermediate / Advanced',
     

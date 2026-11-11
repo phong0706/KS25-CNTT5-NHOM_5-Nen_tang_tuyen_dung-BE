@@ -71,7 +71,7 @@ class CandidateSkill(Base):
     )
     # Tham chiếu đến bảng skills (danh mục) — nullable để cho phép nhập tự do
     skill_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("skills.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("skills.id", ondelete="SET NULL"), nullable=True
     )
     skill_name: Mapped[str] = mapped_column(String(255), nullable=False)
     level: Mapped[str | None] = mapped_column(
