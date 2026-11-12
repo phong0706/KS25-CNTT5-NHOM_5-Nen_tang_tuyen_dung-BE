@@ -31,6 +31,22 @@ from app.schemas.candidate_schema import (
     CandidateProfileOut,
 )
 
+# Import các schema tin tuyển dụng & lưu tin
+from app.schemas.job import (
+    JobCreate,
+    JobUpdate,
+    JobStatusUpdate,
+    JobOut,
+    JobMutationResponse,
+    JobSearchOut,
+    JobSearchPageOut,
+)
+from app.schemas.saved_job import (
+    SavedJobCreate,
+    SavedJobOut,
+    SavedJobDetailOut,
+)
+
 # Import các schema đơn ứng tuyển
 from app.schemas.application_schema import (
     ApplicationCreate,
@@ -73,6 +89,16 @@ __all__ = [
     "CandidateProfileCreate",
     "CandidateProfileUpdate",
     "CandidateProfileOut",
+    "JobCreate",
+    "JobUpdate",
+    "JobStatusUpdate",
+    "JobOut",
+    "JobMutationResponse",
+    "JobSearchOut",
+    "JobSearchPageOut",
+    "SavedJobCreate",
+    "SavedJobOut",
+    "SavedJobDetailOut",
     "ApplicationCreate",
     "ApplicationUpdate",
     "ApplicationOut",

@@ -2,13 +2,17 @@
 
 Tính năng:
 - Kiểm tra tên không trùng
-- Không xóa khi đang được sử dụng
-- Soft delete (ẩn bằng cách đổi status)
+- Không xóa khi đang được sử dụng (trong jobs, companies, job_skills, candidate_skills)
+- Soft delete (ẩn bằng cách đổi status='inactive')
 """
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.candidate import CandidateSkill
 from app.models.catalog import Industry, Location, Skill
+from app.models.company import Company
+from app.models.job import Job
+from app.models.job_skill import JobSkill
 from app.schemas.catalog_schema import CatalogCreate, CatalogUpdate
 
 
@@ -16,7 +20,10 @@ from app.schemas.catalog_schema import CatalogCreate, CatalogUpdate
 # GENERIC FUNCTIONS (dùng chung cho 3 models)
 # ============================================
 
-def get_all_catalogs(db: Session, model_class, status: str | None = None) -> list:
+
+def get_all_catalogs(
+    db: Session, model_class, status: str | None = None
+) -> list:
     """Lấy tất cả danh mục. Nếu status=None thì lấy hết, ngược lại lọc theo status."""
     query = select(model_class).order_by(model_class.name)
     if status:
@@ -39,7 +46,7 @@ def create_catalog(db: Session, model_class, data: CatalogCreate):
     existing = get_catalog_by_name(db, model_class, data.name)
     if existing:
         raise ValueError(f"Tên '{data.name}' đã tồn tại")
-    
+
     catalog = model_class(**data.model_dump())
     db.add(catalog)
     db.commit()
@@ -50,16 +57,16 @@ def create_catalog(db: Session, model_class, data: CatalogCreate):
 def update_catalog(db: Session, model_class, catalog, data: CatalogUpdate):
     """Cập nhật danh mục. Kiểm tra tên trùng nếu đổi tên."""
     update_data = data.model_dump(exclude_unset=True)
-    
+
     # Nếu đổi tên, kiểm tra tên mới có trùng không
     if "name" in update_data:
         existing = get_catalog_by_name(db, model_class, update_data["name"])
         if existing and existing.id != catalog.id:
             raise ValueError(f"Tên '{update_data['name']}' đã tồn tại")
-    
+
     for field, value in update_data.items():
         setattr(catalog, field, value)
-    
+
     db.commit()
     db.refresh(catalog)
     return catalog
@@ -74,16 +81,38 @@ def soft_delete_catalog(db: Session, catalog):
 
 
 def check_catalog_in_use(db: Session, model_class, catalog_id: int) -> bool:
+    """Kiểm tra danh mục có đang được sử dụng trong các bảng nghiệp vụ không.
+
+    - Industry: kiểm tra trong bảng jobs và companies
+    - Location: kiểm tra trong bảng jobs
+    - Skill: kiểm tra trong bảng job_skills và candidate_skills
     """
-    Kiểm tra danh mục có đang được sử dụng không.
-    
-    TODO: Cần implement logic kiểm tra dựa vào các bảng liên quan:
-    - Industry: kiểm tra trong bảng jobs, companies, user_profiles...
-    - Location: kiểm tra trong bảng jobs, companies...
-    - Skill: kiểm tra trong bảng user_skills, job_skills...
-    
-    Hiện tại trả về False (chưa được sử dụng).
-    """
+    if model_class is Industry:
+        in_jobs = db.scalar(
+            select(Job.id).where(Job.industry_id == catalog_id).limit(1)
+        )
+        in_companies = db.scalar(
+            select(Company.id).where(Company.industry_id == catalog_id).limit(1)
+        )
+        return (in_jobs is not None) or (in_companies is not None)
+
+    if model_class is Location:
+        in_jobs = db.scalar(
+            select(Job.id).where(Job.location_id == catalog_id).limit(1)
+        )
+        return in_jobs is not None
+
+    if model_class is Skill:
+        in_job_skills = db.scalar(
+            select(JobSkill.id).where(JobSkill.skill_id == catalog_id).limit(1)
+        )
+        in_candidate_skills = db.scalar(
+            select(CandidateSkill.id)
+            .where(CandidateSkill.skill_id == catalog_id)
+            .limit(1)
+        )
+        return (in_job_skills is not None) or (in_candidate_skills is not None)
+
     return False
 
 
@@ -91,7 +120,10 @@ def check_catalog_in_use(db: Session, model_class, catalog_id: int) -> bool:
 # INDUSTRY FUNCTIONS
 # ============================================
 
-def get_industries(db: Session, status: str | None = "active") -> list[Industry]:
+
+def get_industries(
+    db: Session, status: str | None = "active"
+) -> list[Industry]:
     """Lấy danh sách ngành nghề."""
     return get_all_catalogs(db, Industry, status)
 
@@ -106,7 +138,9 @@ def create_industry(db: Session, data: CatalogCreate) -> Industry:
     return create_catalog(db, Industry, data)
 
 
-def update_industry(db: Session, industry: Industry, data: CatalogUpdate) -> Industry:
+def update_industry(
+    db: Session, industry: Industry, data: CatalogUpdate
+) -> Industry:
     """Cập nhật ngành nghề."""
     return update_catalog(db, Industry, industry, data)
 
@@ -122,7 +156,10 @@ def delete_industry(db: Session, industry: Industry) -> Industry:
 # LOCATION FUNCTIONS
 # ============================================
 
-def get_locations(db: Session, status: str | None = "active") -> list[Location]:
+
+def get_locations(
+    db: Session, status: str | None = "active"
+) -> list[Location]:
     """Lấy danh sách địa điểm."""
     return get_all_catalogs(db, Location, status)
 
@@ -137,7 +174,9 @@ def create_location(db: Session, data: CatalogCreate) -> Location:
     return create_catalog(db, Location, data)
 
 
-def update_location(db: Session, location: Location, data: CatalogUpdate) -> Location:
+def update_location(
+    db: Session, location: Location, data: CatalogUpdate
+) -> Location:
     """Cập nhật địa điểm."""
     return update_catalog(db, Location, location, data)
 
@@ -152,6 +191,7 @@ def delete_location(db: Session, location: Location) -> Location:
 # ============================================
 # SKILL FUNCTIONS
 # ============================================
+
 
 def get_skills(db: Session, status: str | None = "active") -> list[Skill]:
     """Lấy danh sách kỹ năng."""
