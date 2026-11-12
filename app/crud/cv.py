@@ -89,9 +89,6 @@ def check_cv_used_in_applications(db: Session, cv_id: int) -> bool:
     """
     Kiểm tra CV đã được dùng để nộp đơn chưa.
 
-    Note: Tạm thời return False vì chưa có bảng applications.
-    Khi có bảng applications, cần implement logic kiểm tra thực tế.
-
     Args:
         db: Database session
         cv_id: ID của CV
@@ -99,7 +96,7 @@ def check_cv_used_in_applications(db: Session, cv_id: int) -> bool:
     Returns:
         True nếu CV đã được dùng, False nếu chưa
     """
-    # TODO: Implement khi có bảng applications
-    # query = select(Application).where(Application.cv_id == cv_id).limit(1)
-    # return db.scalar(query) is not None
-    return False
+    from app.models.application import Application  # noqa: PLC0415
+    
+    query = select(Application).where(Application.cv_id == cv_id).limit(1)
+    return db.scalar(query) is not None

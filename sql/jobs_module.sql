@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS locations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS skills (
-  id   BIGINT       AUTO_INCREMENT PRIMARY KEY,
+  id   INT       AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -150,9 +150,9 @@ DEALLOCATE PREPARE jobs_currency_stmt;
 -- BẢNG job_skills
 -- ============================================================
 CREATE TABLE IF NOT EXISTS job_skills (
-  id          BIGINT    AUTO_INCREMENT PRIMARY KEY,
-  job_id      BIGINT    NOT NULL,
-  skill_id    BIGINT    NOT NULL,
+  id          INT    AUTO_INCREMENT PRIMARY KEY,
+  job_id      INT    NOT NULL,
+  skill_id    INT    NOT NULL,
   is_required BOOLEAN   NOT NULL DEFAULT TRUE,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_job_skills_job   FOREIGN KEY (job_id)   REFERENCES jobs(id) ON DELETE CASCADE,

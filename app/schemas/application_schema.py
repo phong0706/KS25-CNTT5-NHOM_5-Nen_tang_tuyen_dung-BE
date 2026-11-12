@@ -20,7 +20,6 @@ class ApplicationBase(BaseModel):
 
 class ApplicationCreate(ApplicationBase):
     """Dữ liệu FE gửi lên khi ứng viên tạo đơn ứng tuyển mới."""
-    candidate_profile_id: int = Field(examples=[1])
     job_id: int = Field(examples=[5])
 
 

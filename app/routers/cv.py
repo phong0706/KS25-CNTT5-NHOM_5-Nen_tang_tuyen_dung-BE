@@ -9,9 +9,11 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import get_current_user
 from app.crud import cv as cv_crud
 from app.db.session import get_db
 from app.models.candidate import CandidateProfile, Cv
@@ -26,17 +28,35 @@ router = APIRouter(prefix="/cvs", tags=["CV Management"])
 # ============================================================================
 
 
-def get_current_profile_id() -> int:
+def get_current_profile_id(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> int:
+    """Lấy candidate_profile_id của user hiện tại từ JWT token.
+    
+    Chỉ cho phép user có role 'candidate' truy cập.
     """
-    TODO: Lấy profile_id của user hiện tại từ JWT token.
-
-    Tạm thời hardcode để test. Khi có auth, thay bằng:
-    - Decode JWT token từ header Authorization
-    - Lấy user_id từ token
-    - Query CandidateProfile theo user_id
-    """
-    # FIXME: Thay bằng logic auth thật
-    return 1  # Giả sử profile_id = 1
+    from app.core.security import role_required  # noqa: PLC0415
+    
+    # Kiểm tra role
+    if current_user.role != "candidate":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chức năng này chỉ dành cho ứng viên",
+        )
+    
+    # Lấy CandidateProfile từ user_id
+    profile = db.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == current_user.id)
+    )
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Hồ sơ ứng viên không tồn tại. Vui lòng tạo hồ sơ trước.",
+        )
+    
+    return profile.id
 
 
 def get_profile_or_404(
