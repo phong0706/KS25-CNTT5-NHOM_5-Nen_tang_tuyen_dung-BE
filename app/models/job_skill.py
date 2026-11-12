@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Index
+from sqlalchemy import Boolean, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -14,3 +14,4 @@ class JobSkill(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"), nullable=False)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
