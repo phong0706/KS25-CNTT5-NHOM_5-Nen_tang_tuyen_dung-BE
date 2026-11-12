@@ -3,17 +3,18 @@
 Yêu cầu: đã chạy sql/init.sql (bảng users) và seed.py (bảng industries) trước.
 Chạy:  python seed_company.py
 """
-import sys
 import os
+import sys
 
 # đường dẫn thư mục BE vào hệ thống để Python nhận diện được app
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.db.session import SessionLocal
-from app.models.company import Company, CompanyStatus
-from app.models.catalog import Industry
-from app.models.item import Item  # noqa: F401  - chỉ để SQLAlchemy nhận đủ các bảng
+from sqlalchemy import text
 
+from app.db.session import SessionLocal
+from app.models.catalog import Industry
+from app.models.company import Company, CompanyStatus
+from app.models.item import Item  # noqa: F401 - chỉ để SQLAlchemy nhận đủ các bảng
 
 # (email_chủ_tài_khoản, tên_công_ty, logo, ảnh_bìa, mã_số_thuế, quy_mô, tên_ngành, địa_chỉ, website, mô_tả)
 COMPANIES = [
@@ -54,7 +55,7 @@ COMPANIES = [
         "Tập đoàn Công nghiệp - Viễn thông Quân đội, nhà mạng lớn nhất Việt Nam.",
     ),
     (
-        "hr4tuyendung.com",
+        "hr4@tuyendung.com",
         "Vingroup",
         "https://example.com/logos/vingroup.png",
         "https://example.com/covers/vingroup.png",
@@ -85,53 +86,73 @@ def run_seed():
     try:
         print("Đang tiến hành seed dữ liệu công ty...")
 
-        # Nạp sẵn danh sách ngành để tra nhanh theo tên
         industries = {ind.name: ind.id for ind in db.query(Industry).all()}
         if not industries:
-            print("Cảnh báo: chưa có dữ liệu ngành (industries). Hãy chạy seed.py trước.")
+            print(
+                "Cảnh báo: chưa có dữ liệu ngành (industries). Hãy chạy seed.py trước."
+            )
 
         added = 0
         skipped = 0
 
         for (
-            owner_email, name, logo, cover_image, tax_code,
-            company_size, industry_name, address, website, description,
+            owner_email,
+            name,
+            logo,
+            cover_image,
+            tax_code,
+            company_size,
+            industry_name,
+            address,
+            website,
+            description,
         ) in COMPANIES:
-            # Bỏ qua nếu công ty đã tồn tại (chạy lại không trùng)
             if db.query(Company).filter_by(name=name).first():
                 skipped += 1
                 continue
 
-            # Tra owner_id theo email user (employer)
             row = db.execute(
-                __import__("sqlalchemy").text("SELECT id FROM users WHERE email = :email LIMIT 1"),
-                {"email": owner_email},
+                text(
+                    "SELECT id FROM users WHERE email IN (:email, :fallback_email) LIMIT 1"
+                ),
+                {
+                    "email": owner_email,
+                    "fallback_email": owner_email.replace("@", ""),
+                },
             ).first()
             if row is None:
-                print(f"Bỏ qua '{name}': không tìm thấy user email='{owner_email}'. Hãy chạy sql/init.sql trước.")
+                print(
+                    f"Bỏ qua '{name}': không tìm thấy user email='{owner_email}'. Hãy chạy sql/init.sql trước."
+                )
                 skipped += 1
                 continue
             owner_id = row[0]
 
             industry_id = industries.get(industry_name)
 
-            db.add(Company(
-                owner_id=owner_id,
-                name=name,
-                logo=logo,
-                cover_image=cover_image,
-                tax_code=tax_code,
-                company_size=company_size,
-                industry_id=industry_id,
-                address=address,
-                website=website,
-                description=description,
-                status=CompanyStatus.VERIFIED,
-            ))
+            db.add(
+                Company(
+                    employer_id=owner_id,
+                    owner_id=owner_id,
+                    name=name,
+                    logo=logo,
+                    cover_image=cover_image,
+                    tax_code=tax_code,
+                    company_size=company_size,
+                    industry_id=industry_id,
+                    address=address,
+                    website=website,
+                    description=description,
+                    status=CompanyStatus.VERIFIED,
+                    is_draft=False,
+                )
+            )
             added += 1
 
         db.commit()
-        print(f"Seed công ty thành công! Đã thêm {added} công ty VERIFIED, bỏ qua {skipped} công ty đã có/thiếu chủ.")
+        print(
+            f"Seed công ty thành công! Đã thêm {added} công ty VERIFIED, bỏ qua {skipped} công ty đã có/thiếu chủ."
+        )
 
     except Exception as e:
         db.rollback()

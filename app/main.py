@@ -1,7 +1,7 @@
-"""Diem khoi dong cua backend.
+"""Điểm khởi động của backend.
 
-Chay: uvicorn app.main:app --reload
-Tai lieu API: http://127.0.0.1:8000/docs
+Chạy: uvicorn app.main:app --reload
+Tài liệu API: http://127.0.0.1:8000/docs
 """
 import sys
 from contextlib import asynccontextmanager
@@ -15,8 +15,6 @@ from sqlalchemy.exc import OperationalError
 from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
-
-# Đã gộp đầy đủ các router từ cả 2 nhánh
 from app.routers import (
     applications,
     auth,
@@ -31,29 +29,34 @@ from app.routers import (
     skills,
 )
 
-# Fix encoding cho Windows console (tranh loi UnicodeEncodeError voi tieng Viet)
+# Fix encoding cho Windows console (tránh lỗi UnicodeEncodeError với tiếng Việt)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+# Đảm bảo thư mục upload tồn tại trước khi mount StaticFiles
+Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+Path(settings.CV_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
-        print(f"[DB] Ket noi MySQL thanh cong {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
+        print(
+            f"[DB] Ket noi MySQL thanh cong {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+        )
     except OperationalError as error:
         print("[DB] KHONG ket noi duoc MySQL! Kiem tra MySQL va file .env.")
         if "Unknown database" in str(error.orig):
             print("[DB] Chua co database -> chay file sql/init.sql")
         print(f"[DB] Chi tiet: {error.orig}")
-        
-    # Tạo thư mục upload nếu chưa có
+
     upload_path = Path(settings.UPLOAD_DIR)
     upload_path.mkdir(parents=True, exist_ok=True)
     print(f"[Upload] Thu muc luu anh/CV: {upload_path.resolve()}")
-    
+
     cv_upload_path = Path(settings.CV_UPLOAD_DIR)
     cv_upload_path.mkdir(parents=True, exist_ok=True)
     print(f"[CV Upload] Thu muc luu CV: {cv_upload_path.resolve()}")
@@ -70,8 +73,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Phục vụ file tĩnh (thư mục đã được tạo trong lifespan)
+# Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py)
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Đăng ký toàn bộ router
 app.include_router(health.router, prefix="/api")

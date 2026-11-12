@@ -1,12 +1,15 @@
+"""Schema cho module Tin tuyển dụng (Job) và Tìm kiếm / Phân trang."""
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.saved_job import SavedJobDetailOut
 
 JobStatus = Literal["DRAFT", "PENDING", "OPEN", "HIDDEN", "CLOSED", "REJECTED"]
 JobType = Literal["FULLTIME", "PARTTIME", "INTERN", "REMOTE"]
+JobSortBy = Literal["newest", "salary_desc", "salary_asc"]
 
 
 class JobSkillInput(BaseModel):
@@ -37,6 +40,7 @@ class JobFields(BaseModel):
         if not value.strip():
             raise ValueError("title không được để trống")
         return value.strip()
+
 
 class JobCreate(JobFields):
     status: Literal["DRAFT", "PENDING", "OPEN"] = "DRAFT"
@@ -99,7 +103,7 @@ class JobOut(BaseModel):
     views_count: int
     created_at: datetime | None
     updated_at: datetime | None
-    job_skills: list[JobSkillOut]
+    job_skills: list[JobSkillOut] = Field(default_factory=list)
 
 
 class JobMutationResponse(BaseModel):
@@ -109,23 +113,55 @@ class JobMutationResponse(BaseModel):
 
 
 class JobSearchOut(BaseModel):
-    id: int
-    title: str
-    description: str | None
-    company_name: str
-    industry_name: str
-    location_name: str
-    deadline: datetime
-    created_at: datetime
+    """Thông tin 1 tin tuyển dụng trong kết quả tìm kiếm."""
 
-
-class SavedJobDetailOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     title: str
+    description: str | None = None
+    company_id: int | None = None
     company_name: str
+    company_logo: str | None = None
+    industry_id: int | None = None
     industry_name: str
+    location_id: int | None = None
     location_name: str
+    job_type: str = "FULLTIME"
+    experience_level: str = ""
+    salary_min: Decimal | None = None
+    salary_max: Decimal | None = None
+    is_negotiable: bool = False
+    currency: str = "VND"
+    skills: list[str] = Field(default_factory=list)
     deadline: datetime
-    saved_at: datetime
+    created_at: datetime
+    is_saved: bool = False
+
+
+class JobSearchPageOut(BaseModel):
+    """Kết quả tìm kiếm việc làm có phân trang."""
+
+    items: list[JobSearchOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+__all__ = [
+    "JobStatus",
+    "JobType",
+    "JobSortBy",
+    "JobSkillInput",
+    "JobFields",
+    "JobCreate",
+    "JobUpdate",
+    "JobStatusUpdate",
+    "JobSkillOut",
+    "JobOut",
+    "JobMutationResponse",
+    "JobSearchOut",
+    "JobSearchPageOut",
+    "SavedJobDetailOut",
+]
