@@ -46,3 +46,32 @@ class ApplicationOut(ApplicationBase):
     employer_notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ApplicationCandidateOut(BaseModel):
+    """Đơn ứng tuyển nhìn từ phía ứng viên.
+
+    Cố ý **không** có `employer_notes` (ghi chú nội bộ của nhà tuyển dụng)
+    để không lộ thông tin nội bộ cho ứng viên.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    candidate_profile_id: int
+    job_id: int
+    job_title: str
+    company_name: str
+    status: ApplicationStatus
+    cv_id: int | None = None
+    cover_letter: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationPageOut(BaseModel):
+    """Kết quả danh sách đơn ứng tuyển có phân trang."""
+    items: list[ApplicationCandidateOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

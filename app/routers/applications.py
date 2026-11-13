@@ -1,12 +1,14 @@
 """API quản lý đơn ứng tuyển (Applications).
 
-    POST /api/applications          Nộp đơn ứng tuyển (candidate only)
-    GET  /api/applications          Lấy danh sách đơn của ứng viên hiện tại
-    GET  /api/applications/{id}     Xem chi tiết đơn ứng tuyển
+    POST /api/applications                    Nộp đơn ứng tuyển (candidate only)
+    GET  /api/applications                    Lấy danh sách đơn của ứng viên hiện tại
+    GET  /api/applications/{id}               Xem chi tiết đơn ứng tuyển
+    GET  /api/applications/{id}/history       Lịch sử trạng thái đơn (tăng dần theo thời gian)
+    POST /api/applications/{id}/withdraw      Rút đơn ứng tuyển
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,12 +17,17 @@ from app.core.security import get_current_user, role_required
 from app.crud import application as application_crud
 from app.crud import notification as notification_crud
 from app.db.session import get_db
-from app.models.application import Application
+from app.models.application import Application, ApplicationStatus
 from app.models.candidate import CandidateProfile, Cv
 from app.models.company import Company
 from app.models.job import Job
 from app.models.user import User
-from app.schemas.application_schema import ApplicationCreate, ApplicationOut
+from app.schemas.application_schema import (
+    ApplicationCreate,
+    ApplicationOut,
+    ApplicationPageOut,
+)
+from app.schemas.application_status_history_schema import ApplicationStatusHistoryOut
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -96,6 +103,32 @@ def get_employer_user_id(db: Session, job: Job) -> int:
             detail="Không tìm thấy thông tin công ty của tin tuyển dụng này.",
         )
     return company.employer_id
+
+
+def get_own_application(
+    db: Session, application_id: int, current_user: User
+) -> Application:
+    """Lấy đơn ứng tuyển thuộc về ứng viên đang đăng nhập.
+
+    Raises:
+        404: Không tìm thấy đơn ứng tuyển
+        403: Đơn ứng tuyển thuộc về người khác
+    """
+    application = application_crud.get_application_by_id(db, application_id)
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy đơn ứng tuyển với id={application_id}",
+        )
+
+    profile = get_candidate_profile(db, current_user.id)
+    if application.candidate_profile_id != profile.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền truy cập đơn ứng tuyển của người khác.",
+        )
+
+    return application
 
 
 # ============================================================================
@@ -186,19 +219,39 @@ def submit_application(
     return application
 
 
-@router.get("", response_model=list[ApplicationOut])
+@router.get(
+    "",
+    response_model=ApplicationPageOut,
+    summary="Danh sách đơn ứng tuyển của tôi (có phân trang + lọc trạng thái)",
+)
 def list_my_applications(
+    status_filter: ApplicationStatus | None = Query(
+        default=None,
+        alias="status",
+        description="Lọc theo trạng thái đơn: SUBMITTED, REVIEWING, INTERVIEW, OFFERED, REJECTED, WITHDRAWN",
+    ),
+    page: int = Query(default=1, ge=1, description="Số trang hiện tại (bắt đầu từ 1)"),
+    page_size: int = Query(
+        default=10, ge=1, le=100, description="Số đơn trên mỗi trang (tối đa 100)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required("candidate")),
 ):
-    """Lấy danh sách đơn ứng tuyển của ứng viên hiện tại.
-    
-    Chỉ ứng viên (role=candidate) mới được xem danh sách đơn của mình.
-    Sắp xếp theo thời gian nộp (mới nhất trước).
+    """Lấy danh sách đơn ứng tuyển của ứng viên đang đăng nhập.
+
+    - Chỉ ứng viên (role=candidate) mới được xem danh sách đơn của mình.
+    - Có phân trang (`page`, `page_size`) và lọc theo trạng thái (`status`).
+    - Sắp xếp mới nhất trước.
+    - **Không** trả về `employer_notes` (ghi chú nội bộ của nhà tuyển dụng).
     """
     profile = get_candidate_profile(db, current_user.id)
-    applications = application_crud.get_applications_by_candidate(db, profile.id)
-    return applications
+    return application_crud.get_applications_by_candidate_paginated(
+        db,
+        profile.id,
+        page=page,
+        page_size=page_size,
+        status=status_filter,
+    )
 
 
 @router.get("/{application_id}", response_model=ApplicationOut)
@@ -252,4 +305,58 @@ def get_application_detail(
     
     return application
 
+
+@router.get(
+    "/{application_id}/history",
+    response_model=list[ApplicationStatusHistoryOut],
+    summary="Lịch sử trạng thái của đơn ứng tuyển của tôi",
+)
+def get_application_history(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Xem lịch sử thay đổi trạng thái của đơn ứng tuyển của mình.
+
+    - Chỉ xem được đơn của chính mình (403 nếu đơn của người khác).
+    - Kết quả sắp xếp theo thời gian **tăng dần** (cũ → mới).
+    """
+    application = get_own_application(db, application_id, current_user)
+    histories = application_crud.get_status_history_by_application(db, application.id)
+    return histories
+
+
+@router.post(
+    "/{application_id}/withdraw",
+    response_model=ApplicationOut,
+    summary="Rút đơn ứng tuyển của tôi",
+)
+def withdraw_my_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Rút đơn ứng tuyển.
+
+    - Chỉ ứng viên đang đăng nhập và chỉ rút được đơn **của chính mình**.
+    - **Không** rút được khi đơn đã ở trạng thái `OFFERED` hoặc `REJECTED` (409).
+    - Rút lại đơn đã `WITHDRAWN` → 409, không ghi thêm lịch sử trùng.
+    - Hồ sơ **không bị xoá**, chỉ chuyển trạng thái sang `WITHDRAWN`.
+    - Việc đổi trạng thái + ghi lịch sử diễn ra trong cùng một transaction.
+    """
+    application = get_own_application(db, application_id, current_user)
+
+    try:
+        updated, _history = application_crud.withdraw_application(
+            db,
+            application,
+            user_id=current_user.id,
+        )
+    except application_crud.WithdrawError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=error.message,
+        )
+
+    return updated
 
