@@ -27,6 +27,7 @@ from app.routers import (
     jobs,
     locations,
     skills,
+    users,
 )
 
 # Fix encoding cho Windows console (tránh lỗi UnicodeEncodeError với tiếng Việt)
@@ -89,6 +90,7 @@ app.include_router(candidate_profile.router, prefix="/api")
 app.include_router(industries.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 
 
 @app.get("/")
