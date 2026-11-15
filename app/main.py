@@ -3,6 +3,7 @@
 Chạy:  uvicorn app.main:app --reload
 Tài liệu API tự sinh: http://127.0.0.1:8000/docs
 """
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +13,28 @@ from sqlalchemy.exc import OperationalError
 from app import models  # noqa: F401 - import để SQLAlchemy biết các bảng
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import auth, health, items
+from app.routers import (
+    admin_interview, auth, candidate_applications, candidate_apply, candidate_detail,
+    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_jobs, health, items, meta, public_jobs, users,
+    nav_meta, tools, interview, candidate_cover_letters, matching, search_insights,
+    salary_insights,
+)
+
+# Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
+# và làm server KHÔNG KHỞI ĐỘNG ĐƯỢC. Ép stdout/stderr dùng UTF-8 + lỗi thay thế.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
+def _log(message: str) -> None:
+    """In log an toàn (không phụ thuộc encoding của console)."""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        print(message.encode("utf-8", "replace").decode("ascii", "replace"))
 
 
 @asynccontextmanager
@@ -21,12 +43,12 @@ async def lifespan(app: FastAPI):
     # Lưu ý: create_all KHÔNG sửa bảng đã tồn tại. Đổi cột -> sửa bằng SQL hoặc xoá bảng tạo lại.
     try:
         Base.metadata.create_all(bind=engine)
-        print(f"[DB] Đã kết nối MySQL {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
+        _log(f"[DB] Đã kết nối MySQL {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
     except OperationalError as error:
-        print("[DB] KHÔNG kết nối được MySQL! Kiểm tra MySQL đã bật chưa và file .env.")
+        _log("[DB] KHÔNG kết nối được MySQL! Kiểm tra MySQL đã bật chưa và file .env.")
         if "Unknown database" in str(error.orig):
-            print("[DB] Chưa có database -> mở MySQL Workbench, chạy file sql/init.sql")
-        print(f"[DB] Chi tiết: {error.orig}")
+            _log("[DB] Chưa có database -> mở MySQL Workbench, chạy file sql/init.sql")
+        _log(f"[DB] Chi tiết: {error.orig}")
     yield
 
 
@@ -44,6 +66,29 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(companies.router, prefix="/api")
+app.include_router(candidate_profile.router, prefix="/api")
+app.include_router(meta.router, prefix="/api")
+app.include_router(employer_jobs.router, prefix="/api")
+# search_insights PHẢI được đăng ký TRƯỚC public_jobs:
+# public_jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
+# khớp "relaxed" vào job_id và trả 422 thay vì gọi tới /api/jobs/relaxed.
+app.include_router(search_insights.router)
+app.include_router(public_jobs.router, prefix="/api")
+app.include_router(candidate_applications.router, prefix="/api")
+app.include_router(candidate_saved_jobs.router, prefix="/api")
+app.include_router(candidate_recommended.router, prefix="/api")
+app.include_router(candidate_apply.router, prefix="/api")
+app.include_router(candidate_detail.router, prefix="/api")
+app.include_router(nav_meta.router)
+app.include_router(tools.router, prefix="/api")
+app.include_router(interview.router, prefix="/api")
+app.include_router(admin_interview.router, prefix="/api")
+app.include_router(candidate_cover_letters.router, prefix="/api")
+app.include_router(matching.router)
+# salary_insights dùng prefix "/salary" -> gắn thêm "/api" để ra /api/salary/insights
+app.include_router(salary_insights.router, prefix="/api")
 
 
 @app.get("/")
