@@ -54,6 +54,9 @@ from app.schemas.application_schema import (
     ApplicationOut,
 )
 
+# Import các schema quản lý tài khoản người dùng (admin)
+from app.schemas.user import UserListOut, UserLockIn, UserOut
+
 # Import các schema lịch sử trạng thái đơn ứng tuyển
 from app.schemas.application_status_history_schema import (
     ApplicationStatusHistoryCreate,
@@ -107,4 +110,7 @@ __all__ = [
     "InterviewCreate",
     "InterviewUpdate",
     "InterviewOut",
+    "UserOut",
+    "UserListOut",
+    "UserLockIn",
 ]
