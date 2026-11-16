@@ -14,7 +14,11 @@ from app.models.user import User
 from app.schemas.employer_application import (
     EmployerInterviewScheduleIn, InterviewCancelIn, InterviewItemOut
 )
-from app.services.notification import notify_interview
+from app.services.notification import (
+    notify_interview,
+    notify_interview_changed,
+    notify_interview_cancelled,
+)
 
 router = APIRouter(prefix="/employer/interviews", tags=["Employer Interviews"])
 
@@ -146,6 +150,15 @@ def reschedule_interview(
         app.interview_at = body.scheduled_at
         app.interview_mode = body.mode
         app.interview_location = body.location_or_link
+        job_title = db.scalar(select(Job.title).where(Job.id == app.job_id)) or ""
+        notify_interview_changed(
+            db,
+            candidate_id=app.candidate_id,
+            application_id=app.id,
+            job_title=job_title,
+            interview_at=body.scheduled_at,
+            actor_id=current_user.id,
+        )
 
     db.commit()
     return {"message": "Đã đổi lịch phỏng vấn thành công!", "scheduled_at": iv.scheduled_at}
@@ -169,6 +182,19 @@ def cancel_interview(
 
     iv.status = "cancelled"
     iv.cancel_reason = body.reason
+
+    app = db.scalar(select(Application).where(Application.id == iv.application_id))
+    if app:
+        job_title = db.scalar(select(Job.title).where(Job.id == app.job_id)) or ""
+        notify_interview_cancelled(
+            db,
+            candidate_id=app.candidate_id,
+            application_id=app.id,
+            job_title=job_title,
+            reason=body.reason,
+            actor_id=current_user.id,
+        )
+
     db.commit()
     return {"message": "Đã hủy lịch phỏng vấn thành công!"}
 

@@ -22,6 +22,7 @@ Nguyên tắc:
     • Không tự commit: hàm dùng chung cùng transaction với nghiệp vụ gọi nó.
       Nếu nghiệp vụ rollback thì thông báo cũng rollback (đúng nhất quán).
 """
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -46,7 +47,10 @@ class NotificationType:
     APPLICATION_SUBMITTED = "application_submitted"
     # Nhà tuyển dụng -> ứng viên
     APPLICATION_STATUS_CHANGED = "application_status_changed"
-    APPLICATION_INTERVIEW = "application_interview"
+    INTERVIEW_SCHEDULED = "interview_scheduled"
+    APPLICATION_INTERVIEW = "interview_scheduled"  # Tương thích ngược
+    INTERVIEW_CHANGED = "interview_changed"
+    INTERVIEW_CANCELLED = "interview_cancelled"
     # Tin tuyển dụng
     JOB_SUBMITTED = "job_submitted"
     JOB_APPROVED = "job_approved"
@@ -56,6 +60,85 @@ class NotificationType:
     CV_DELETED = "cv_deleted"
     # Hệ thống
     SYSTEM = "system"
+
+
+def build_notification_content(
+    notif_type: str,
+    payload_json: str | dict | None,
+    fallback_title: str | None = None,
+    fallback_body: str | None = None,
+    fallback_href: str | None = None,
+) -> tuple[str, str, str]:
+    """Tạo (title, body, href) chuẩn hoá từ type và payload_json.
+    Không bao giờ crash khi payload thiếu trường hoặc không đúng định dạng.
+    Tuyệt đối không ghép lặp tên người dùng.
+    """
+    data: dict[str, Any] = {}
+    if isinstance(payload_json, dict):
+        data = payload_json
+    elif isinstance(payload_json, str) and payload_json.strip():
+        try:
+            parsed = json.loads(payload_json)
+            if isinstance(parsed, dict):
+                data = parsed
+        except Exception:
+            data = {}
+
+    if notif_type == NotificationType.APPLICATION_SUBMITTED:
+        title = "Hồ sơ mới"
+        c_name = data.get("candidate_name") or "Ứng viên"
+        j_title = data.get("job_title") or "vị trí tuyển dụng"
+        body = f"{c_name} ứng tuyển {j_title}"
+        app_id = data.get("application_id")
+        job_id = data.get("job_id")
+        if app_id and job_id:
+            href = f"/pages/employer/recruitment.html?tab=candidates&job={job_id}&app={app_id}"
+        elif app_id:
+            href = f"/pages/employer/recruitment.html?tab=candidates&app={app_id}"
+        else:
+            href = fallback_href or "/pages/employer/recruitment.html?tab=candidates"
+        return title, body, href
+
+    if notif_type == NotificationType.APPLICATION_STATUS_CHANGED:
+        title = "Cập nhật trạng thái hồ sơ"
+        j_title = data.get("job_title") or "vị trí ứng tuyển"
+        st_label = data.get("status_label") or data.get("status") or "mới"
+        body = f"Hồ sơ ứng tuyển {j_title} đã chuyển sang: {st_label}"
+        app_id = data.get("application_id")
+        href = f"/pages/candidate/applications.html?app_id={app_id}" if app_id else (fallback_href or "/pages/candidate/applications.html")
+        return title, body, href
+
+    if notif_type in (NotificationType.INTERVIEW_SCHEDULED, "application_interview"):
+        title = "Lịch phỏng vấn mới"
+        j_title = data.get("job_title") or "vị trí ứng tuyển"
+        time_str = data.get("time") or data.get("scheduled_at") or "sắp tới"
+        body = f"Bạn có lịch hẹn phỏng vấn vị trí {j_title} lúc {time_str}"
+        app_id = data.get("application_id")
+        href = f"/pages/candidate/applications.html?app_id={app_id}" if app_id else (fallback_href or "/pages/candidate/applications.html")
+        return title, body, href
+
+    if notif_type == NotificationType.INTERVIEW_CHANGED:
+        title = "Thay đổi lịch phỏng vấn"
+        j_title = data.get("job_title") or "vị trí ứng tuyển"
+        time_str = data.get("time") or data.get("scheduled_at") or "sắp tới"
+        body = f"Lịch phỏng vấn vị trí {j_title} đã dời sang {time_str}"
+        app_id = data.get("application_id")
+        href = f"/pages/candidate/applications.html?app_id={app_id}" if app_id else (fallback_href or "/pages/candidate/applications.html")
+        return title, body, href
+
+    if notif_type == NotificationType.INTERVIEW_CANCELLED:
+        title = "Hủy lịch phỏng vấn"
+        j_title = data.get("job_title") or "vị trí ứng tuyển"
+        body = f"Lịch phỏng vấn vị trí {j_title} đã bị hủy"
+        app_id = data.get("application_id")
+        href = f"/pages/candidate/applications.html?app_id={app_id}" if app_id else (fallback_href or "/pages/candidate/applications.html")
+        return title, body, href
+
+    # Fallback cho các loại khác
+    title = fallback_title or _TYPE_TITLES.get(notif_type) or "Thông báo"
+    body = fallback_body or ""
+    href = fallback_href or ""
+    return title, body, href
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +182,9 @@ def create_notification(
     link: str | None = None,
     ref_type: str | None = None,
     ref_id: int | None = None,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+    payload_json: str | dict | None = None,
     dedupe_key: str | None = None,
     commit: bool = False,
 ) -> Notification | None:
@@ -135,6 +221,12 @@ def create_notification(
         if existing is not None:
             return None
 
+    payload_str = None
+    if isinstance(payload_json, dict):
+        payload_str = json.dumps(payload_json, ensure_ascii=False)
+    elif isinstance(payload_json, str):
+        payload_str = payload_json
+
     notification = Notification(
         user_id=user_id,
         actor_id=actor_id,
@@ -142,8 +234,11 @@ def create_notification(
         title=(title or _TYPE_TITLES.get(type) or "Thông báo")[:255],
         message=message,
         link=link,
-        ref_type=ref_type,
-        ref_id=ref_id,
+        ref_type=ref_type or entity_type,
+        ref_id=ref_id or entity_id,
+        entity_type=entity_type or ref_type,
+        entity_id=entity_id or ref_id,
+        payload_json=payload_str,
         is_read=False,
         dedupe_key=dedupe_key,
     )
@@ -190,20 +285,33 @@ def notify_application_submitted(
     candidate_name: str,
     job_title: str,
     application_id: int,
+    job_id: int | None = None,
     candidate_id: int | None = None,
     commit: bool = False,
 ) -> Notification | None:
     """Thông báo cho nhà tuyển dụng: có hồ sơ ứng tuyển mới."""
+    href = (
+        f"/pages/employer/recruitment.html?tab=candidates&job={job_id}&app={application_id}"
+        if job_id
+        else f"/pages/employer/recruitment.html?tab=candidates&app={application_id}"
+    )
+    payload = {
+        "candidate_name": candidate_name,
+        "job_title": job_title,
+        "application_id": application_id,
+        "job_id": job_id,
+    }
     return create_notification(
         db,
         user_id=employer_id,
         actor_id=candidate_id,
         type=NotificationType.APPLICATION_SUBMITTED,
-        title="Có hồ sơ ứng tuyển mới",
-        message=f"{candidate_name} vừa ứng tuyển vị trí {job_title}.",
-        link=f"/pages/employer/applications.html?app_id={application_id}",
-        ref_type="application",
-        ref_id=application_id,
+        title="Hồ sơ mới",
+        message=f"{candidate_name} đã ứng tuyển vị trí {job_title}",
+        link=href,
+        entity_type="application",
+        entity_id=application_id,
+        payload_json=payload,
         dedupe_key=f"application:{application_id}:submitted",
         commit=commit,
     )
@@ -222,19 +330,25 @@ def notify_application_status_changed(
     commit: bool = False,
 ) -> Notification | None:
     """Thông báo cho ứng viên: hồ sơ chuyển sang trạng thái mới."""
-    message = f"Hồ sơ ứng tuyển vị trí {job_title} đã chuyển sang trạng thái '{status_label}'."
-    if note:
-        message = f"{message} {note}"
+    payload = {
+        "job_title": job_title,
+        "status": status,
+        "status_label": status_label,
+        "application_id": application_id,
+        "note": note,
+    }
+    message = f"Hồ sơ ứng tuyển vị trí {job_title} đã chuyển sang: {status_label}"
     return create_notification(
         db,
         user_id=candidate_id,
         actor_id=actor_id,
         type=NotificationType.APPLICATION_STATUS_CHANGED,
-        title="Hồ sơ của bạn đã được cập nhật",
+        title="Cập nhật trạng thái hồ sơ",
         message=message,
         link=f"/pages/candidate/applications.html?app_id={application_id}",
-        ref_type="application",
-        ref_id=application_id,
+        entity_type="application",
+        entity_id=application_id,
+        payload_json=payload,
         dedupe_key=f"application:{application_id}:status:{status}",
         commit=commit,
     )
@@ -289,7 +403,7 @@ def count_unread(db: Session, user_id: int) -> int:
         db.scalar(
             select(func.count(Notification.id)).where(
                 Notification.user_id == user_id,
-                Notification.is_read == False,  # noqa: E712
+                (Notification.read_at.is_(None)) | (Notification.is_read == False),  # noqa: E712
             )
         )
         or 0
@@ -306,7 +420,7 @@ def mark_as_read(db: Session, user_id: int, notification_ids: list[int]) -> int:
         .where(
             Notification.user_id == user_id,
             Notification.id.in_(notification_ids),
-            Notification.is_read == False,  # noqa: E712
+            (Notification.read_at.is_(None)) | (Notification.is_read == False),  # noqa: E712
         )
         .values(is_read=True, read_at=now)
     )
@@ -320,7 +434,7 @@ def mark_all_as_read(db: Session, user_id: int) -> int:
         update(Notification)
         .where(
             Notification.user_id == user_id,
-            Notification.is_read == False,  # noqa: E712
+            (Notification.read_at.is_(None)) | (Notification.is_read == False),  # noqa: E712
         )
         .values(is_read=True, read_at=now)
     )
@@ -355,7 +469,7 @@ def serialize_notification(
     }
 
 
-def notify_interview(
+def notify_interview_scheduled(
     db: Session,
     *,
     candidate_id: int,
@@ -369,20 +483,98 @@ def notify_interview(
 ) -> Notification | None:
     """Thông báo cho ứng viên: được mời phỏng vấn."""
     when = interview_at.strftime("%H:%M %d/%m/%Y") if interview_at else "sắp tới"
-    detail = " · ".join(x for x in (interview_mode, interview_location) if x)
-    message = f"Bạn được mời phỏng vấn vị trí {job_title} vào {when}."
-    if detail:
-        message = f"{message} {detail}"
+    payload = {
+        "job_title": job_title,
+        "application_id": application_id,
+        "scheduled_at": interview_at.isoformat() if interview_at else None,
+        "time": when,
+        "mode": interview_mode,
+        "location": interview_location,
+    }
+    message = f"Bạn có lịch hẹn phỏng vấn vị trí {job_title} lúc {when}"
     return create_notification(
         db,
         user_id=candidate_id,
         actor_id=actor_id,
-        type=NotificationType.APPLICATION_INTERVIEW,
-        title="Lời mời phỏng vấn",
+        type=NotificationType.INTERVIEW_SCHEDULED,
+        title="Lịch phỏng vấn mới",
         message=message,
         link=f"/pages/candidate/applications.html?app_id={application_id}",
-        ref_type="application",
-        ref_id=application_id,
-        dedupe_key=f"application:{application_id}:interview",
+        entity_type="application",
+        entity_id=application_id,
+        payload_json=payload,
+        dedupe_key=f"application:{application_id}:interview:{when}",
+        commit=commit,
+    )
+
+
+# Bí danh tương thích ngược
+notify_interview = notify_interview_scheduled
+
+
+def notify_interview_changed(
+    db: Session,
+    *,
+    candidate_id: int,
+    application_id: int,
+    job_title: str,
+    interview_at: datetime,
+    actor_id: int | None = None,
+    commit: bool = False,
+) -> Notification | None:
+    """Thông báo cho ứng viên: đổi lịch phỏng vấn."""
+    when = interview_at.strftime("%H:%M %d/%m/%Y") if interview_at else "sắp tới"
+    payload = {
+        "job_title": job_title,
+        "application_id": application_id,
+        "scheduled_at": interview_at.isoformat() if interview_at else None,
+        "time": when,
+    }
+    message = f"Lịch phỏng vấn vị trí {job_title} đã dời sang {when}"
+    return create_notification(
+        db,
+        user_id=candidate_id,
+        actor_id=actor_id,
+        type=NotificationType.INTERVIEW_CHANGED,
+        title="Thay đổi lịch phỏng vấn",
+        message=message,
+        link=f"/pages/candidate/applications.html?app_id={application_id}",
+        entity_type="application",
+        entity_id=application_id,
+        payload_json=payload,
+        dedupe_key=f"application:{application_id}:interview_changed:{when}",
+        commit=commit,
+    )
+
+
+def notify_interview_cancelled(
+    db: Session,
+    *,
+    candidate_id: int,
+    application_id: int,
+    job_title: str,
+    reason: str | None = None,
+    actor_id: int | None = None,
+    commit: bool = False,
+) -> Notification | None:
+    """Thông báo cho ứng viên: hủy lịch phỏng vấn."""
+    payload = {
+        "job_title": job_title,
+        "application_id": application_id,
+        "reason": reason,
+    }
+    message = f"Lịch phỏng vấn vị trí {job_title} đã bị hủy"
+    return create_notification(
+        db,
+        user_id=candidate_id,
+        actor_id=actor_id,
+        type=NotificationType.INTERVIEW_CANCELLED,
+        title="Hủy lịch phỏng vấn",
+        message=message,
+        link=f"/pages/candidate/applications.html?app_id={application_id}",
+        entity_type="application",
+        entity_id=application_id,
+        payload_json=payload,
+        dedupe_key=f"application:{application_id}:interview_cancelled:{datetime.now(timezone.utc).timestamp()}",
         commit=commit,
     )

@@ -36,6 +36,7 @@ class Notification(Base):
     __table_args__ = (
         Index("idx_notifications_user_created", "user_id", "created_at"),
         Index("idx_notifications_user_unread", "user_id", "is_read"),
+        Index("idx_notifications_user_read_created", "user_id", "read_at", "created_at"),
         UniqueConstraint(
             "user_id", "dedupe_key", name="uq_notifications_user_dedupe"
         ),
@@ -54,6 +55,9 @@ class Notification(Base):
     link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ref_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Khoá chống trùng: ví dụ "application:{id}:submitted" — NULL = không chống trùng

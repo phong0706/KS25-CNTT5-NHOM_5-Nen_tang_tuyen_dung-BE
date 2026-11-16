@@ -5,13 +5,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class NotificationOut(BaseModel):
-    """Một thông báo trả về cho FE."""
+    """Một thông báo trả về cho FE chuẩn hoá."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     type: str
     title: str
+    body: str = ""
+    href: str = ""
+    created_at: datetime
+    read: bool = False
+    # Tương thích ngược:
     message: str | None = None
     link: str | None = None
     ref_type: str | None = None
@@ -20,18 +25,18 @@ class NotificationOut(BaseModel):
     read_at: datetime | None = None
     actor_id: int | None = None
     actor_name: str | None = None
-    created_at: datetime
 
 
 class NotificationListOut(BaseModel):
-    """Danh sách thông báo có phân trang."""
+    """Danh sách thông báo hỗ trợ phân trang con trỏ (cursor) và phân trang số."""
 
     items: list[NotificationOut] = Field(default_factory=list)
+    next_cursor: str | None = None
+    unread_count: int = 0
     total: int = 0
     page: int = 1
     page_size: int = 10
     total_pages: int = 0
-    unread_count: int = 0
 
 
 class UnreadCountOut(BaseModel):

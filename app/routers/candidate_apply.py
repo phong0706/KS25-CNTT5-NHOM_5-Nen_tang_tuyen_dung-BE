@@ -144,6 +144,7 @@ def apply_job(
         candidate_name=current_user.full_name,
         job_title=job.title,
         application_id=app.id,
+        job_id=job.id,
     )
 
     db.commit()

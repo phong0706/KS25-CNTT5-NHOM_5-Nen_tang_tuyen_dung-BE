@@ -3,9 +3,10 @@
 Moi endpoint deu dung chung prefix "/notifications" va deu yeu cau dang nhap.
 """
 import math
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -20,6 +21,7 @@ from app.schemas.notification import (
     UnreadCountOut,
 )
 from app.services.notification import (
+    build_notification_content,
     count_unread,
     delete_all_notifications,
     mark_all_as_read,
@@ -31,135 +33,144 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 PAGE_SIZE = 10
 
 
-def _actor_names(db: Session, notifications: list[Notification]) -> dict[int, str]:
-    """Lay ten nguoi gui theo actor_id (tranh N+1 query)."""
-    actor_ids = {n.actor_id for n in notifications if n.actor_id}
-    if not actor_ids:
-        return {}
-    rows = db.execute(select(User.id, User.full_name).where(User.id.in_(actor_ids))).all()
-    return {row[0]: row[1] for row in rows}
-
-
-
 # -- LIST ---------------------------------------------------------------
-@router.get("", response_model=NotificationListOut, summary="Danh sach thong bao cua toi")
+@router.get("", response_model=NotificationListOut, summary="Danh sách thông báo của tôi")
 def list_notifications(
-    unread_only: bool = Query(False, description="Chi lay thong bao chua doc"),
-    type_filter: str | None = Query(None, alias="type", description="Loc theo loai thong bao"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(PAGE_SIZE, ge=1, le=50),
+    cursor: str | None = Query(None, description="Con trỏ phân trang (created_at|id)"),
+    unread_only: bool = Query(False, description="Chỉ lấy thông báo chưa đọc"),
+    type_filter: str | None = Query(None, alias="type", description="Lọc theo loại thông báo"),
+    limit: int = Query(PAGE_SIZE, ge=1, le=50, description="Số lượng mục mỗi trang"),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Tra ve danh sach thong bao cua nguoi dang dang nhap, moi nhat truoc.
-
-    Luong:
-        1. Loc theo user_id (luon luon), them unread_only / type neu co.
-        2. Dem tong + dem so chua doc (tra kem de FE hien thi badge).
-        3. Phan trang, sap xep created_at DESC.
-    """
+    actual_limit = page_size or limit
     base = select(Notification).where(Notification.user_id == current_user.id)
 
     if unread_only:
-        base = base.where(Notification.is_read == False)  # noqa: E712
+        base = base.where((Notification.read_at.is_(None)) | (Notification.is_read == False))  # noqa: E712
     if type_filter:
         base = base.where(Notification.type == type_filter)
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    next_cursor = None
 
-    rows = db.scalars(
-        base.order_by(Notification.created_at.desc(), Notification.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).all()
+    if cursor:
+        try:
+            if "|" in cursor:
+                dt_str, id_str = cursor.split("|", 1)
+                cursor_dt, cursor_id = datetime.fromisoformat(dt_str), int(id_str)
+                base = base.where(
+                    (Notification.created_at < cursor_dt)
+                    | ((Notification.created_at == cursor_dt) & (Notification.id < cursor_id))
+                )
+            else:
+                base = base.where(Notification.id < int(cursor))
+        except Exception:
+            pass
+        query = base.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(actual_limit + 1)
+    else:
+        current_page = page or 1
+        query = base.order_by(Notification.created_at.desc(), Notification.id.desc()).offset((current_page - 1) * actual_limit).limit(actual_limit + 1)
 
-    names = _actor_names(db, list(rows))
-    items = [
-        NotificationOut(
-            id=n.id,
-            type=n.type,
-            title=n.title,
-            message=n.message,
-            link=n.link,
-            ref_type=n.ref_type,
-            ref_id=n.ref_id,
-            is_read=bool(n.is_read),
-            read_at=n.read_at,
-            actor_id=n.actor_id,
-            actor_name=names.get(n.actor_id) if n.actor_id else None,
-            created_at=n.created_at,
+    rows = list(db.scalars(query).all())
+    if len(rows) > actual_limit:
+        rows = rows[:actual_limit]
+        next_cursor = f"{rows[-1].created_at.isoformat()}|{rows[-1].id}"
+
+    items = []
+    for n in rows:
+        title, body, href = build_notification_content(n.type, n.payload_json, n.title, n.message, n.link)
+        is_read = bool(n.read_at is not None or n.is_read)
+        items.append(
+            NotificationOut(
+                id=n.id, type=n.type, title=title, body=body, href=href,
+                created_at=n.created_at, read=is_read, is_read=is_read, read_at=n.read_at,
+                message=body, link=href, ref_type=n.entity_type or n.ref_type,
+                ref_id=n.entity_id or n.ref_id, actor_id=n.actor_id,
+            )
         )
-        for n in rows
-    ]
 
     return NotificationListOut(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=math.ceil(total / page_size) if total else 0,
+        items=items, next_cursor=next_cursor, total=total,
+        page=page or 1, page_size=actual_limit,
+        total_pages=math.ceil(total / actual_limit) if total else 0,
         unread_count=count_unread(db, current_user.id),
     )
 
 
 # -- UNREAD COUNT -------------------------------------------------------
-@router.get("/unread-count", response_model=UnreadCountOut, summary="So thong bao chua doc")
+@router.get("/unread-count", response_model=UnreadCountOut, summary="Số thông báo chưa đọc")
 def get_unread_count(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """FE goi endpoint nay de hien thi badge chuong thong bao."""
+    """FE gọi endpoint này để hiển thị badge chuông thông báo."""
     return UnreadCountOut(unread_count=count_unread(db, current_user.id))
 
 
 # -- MARK AS READ -------------------------------------------------------
-@router.post("/read", response_model=MarkReadResultOut, summary="Danh dau da doc (mot hoac nhieu)")
+@router.post("/read", response_model=MarkReadResultOut, summary="Đánh dấu đã đọc (một hoặc nhiều)")
 def mark_notifications_read(
     body: MarkReadRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Danh dau da doc cho danh sach id thong bao.
-
-    Chi danh dau duoc thong bao CUA CHINH nguoi dang dang nhap (dieu kien user_id).
-    """
+    """Đánh dấu đã đọc cho danh sách id thông báo thuộc user hiện tại."""
     updated = mark_as_read(db, current_user.id, body.notification_ids)
     db.commit()
     return MarkReadResultOut(
         updated=updated,
         unread_count=count_unread(db, current_user.id),
-        message=f"Da danh dau {updated} thong bao la da doc.",
+        message=f"Đã đánh dấu {updated} thông báo là đã đọc.",
     )
 
 
-@router.post("/read-all", response_model=MarkReadResultOut, summary="Danh dau da doc toan bo")
+@router.post("/read-all", response_model=MarkReadResultOut, summary="Đánh dấu đã đọc toàn bộ")
 def mark_all_notifications_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Danh dau da doc TAT CA thong bao cua nguoi dang dang nhap."""
+    """Đánh dấu đã đọc TẤT CẢ thông báo của người đang đăng nhập."""
     updated = mark_all_as_read(db, current_user.id)
     db.commit()
     return MarkReadResultOut(
         updated=updated,
         unread_count=0,
-        message=f"Da danh dau {updated} thong bao la da doc.",
+        message=f"Đã đánh dấu {updated} thông báo là đã đọc.",
     )
 
 
-@router.post("/{notification_id}/read", response_model=MarkReadResultOut, summary="Danh dau 1 thong bao da doc")
+@router.post("/{notification_id}/read", response_model=MarkReadResultOut, summary="Đánh dấu 1 thông báo đã đọc")
 def mark_one_notification_read(
     notification_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Dung khi nguoi dung bam vao 1 thong bao tren danh sach."""
-    updated = mark_as_read(db, current_user.id, [notification_id])
+    """Dùng khi người dùng bấm vào 1 thông báo trên danh sách.
+    Chỉ áp dụng cho thông báo của chính user, người khác trả 404.
+    """
+    notif = db.scalar(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    if not notif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thông báo không tồn tại.",
+        )
+
+    now = datetime.now(timezone.utc)
+    notif.is_read = True
+    notif.read_at = now
     db.commit()
     return MarkReadResultOut(
-        updated=updated,
+        updated=1,
         unread_count=count_unread(db, current_user.id),
-        message="Da danh dau thong bao la da doc.",
+        message="Đã đánh dấu thông báo là đã đọc.",
     )
 
 
