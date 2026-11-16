@@ -1,10 +1,4 @@
-"""Tiện ích bảo mật: hash mật khẩu, tạo/xác thực JWT, các dependency xác thực & phân quyền.
-
-Exports chính để các router import:
-    get_current_user    — bắt buộc đăng nhập; 401/403 nếu không hợp lệ / bị khoá
-    get_optional_user   — tuỳ chọn; trả None nếu khách chưa đăng nhập
-    role_required(...)  — factory kiểm tra role; 401/403 nếu sai
-"""
+"""Tiện ích bảo mật: hash mật khẩu, tạo/xác thực JWT, dependency xác thực."""
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
@@ -18,14 +12,7 @@ from app.core.config import settings
 from app.db.session import get_db
 
 ALGORITHM = "HS256"
-
-# auto_error=False → FastAPI không tự ném 403; ta tự kiểm soát lỗi 401 bên dưới
 _bearer = HTTPBearer(auto_error=False)
-
-
-# ---------------------------------------------------------------------------
-# Password
-# ---------------------------------------------------------------------------
 
 
 def hash_password(plain: str) -> str:
@@ -34,11 +21,7 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Kiểm tra mật khẩu người dùng nhập có khớp với mật khẩu trong DB không.
-
-    Hỗ trợ cả mật khẩu đã băm bằng bcrypt ($2b$...) lẫn mật khẩu plain-text
-    từ file sql/init.sql mẫu để tránh lỗi ValueError: Invalid salt khi test.
-    """
+    """Kiểm tra mật khẩu người dùng nhập có khớp với mật khẩu trong DB."""
     if not hashed:
         return False
     if hashed.startswith(("$2a$", "$2b$", "$2y$")):
@@ -49,60 +32,34 @@ def verify_password(plain: str, hashed: str) -> bool:
     return plain == hashed
 
 
-# ---------------------------------------------------------------------------
-# JWT
-# ---------------------------------------------------------------------------
-
-
-def create_access_token(user_id: int, role: str) -> str:
-    """Tạo JWT chứa user_id và role, hết hạn sau JWT_EXPIRE_MINUTES phút."""
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.JWT_EXPIRE_MINUTES
-    )
-    payload = {"sub": str(user_id), "role": role, "exp": expire}
+def create_access_token(user_id: int, role: str, token_version: int = 1) -> str:
+    """Tạo JWT chứa user_id, role và token_ver, hết hạn sau JWT_EXPIRE_MINUTES."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    payload = {"sub": str(user_id), "role": role, "token_ver": token_version, "exp": expire}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 
-# ---------------------------------------------------------------------------
-# Internal helper
-# ---------------------------------------------------------------------------
-
-
-def _extract_user_id(
-    credentials: HTTPAuthorizationCredentials,
-) -> int | None:
-    """Giải mã JWT → trả user_id (int) hoặc None nếu token sai / hết hạn."""
+def _extract_payload(credentials: HTTPAuthorizationCredentials) -> dict | None:
     try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.JWT_SECRET,
-            algorithms=[ALGORITHM],
-        )
-        return int(payload["sub"])
+        return jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[ALGORITHM])
     except (JWTError, KeyError, ValueError):
         return None
 
 
-# ---------------------------------------------------------------------------
-# Dependency: get_current_user
-# ---------------------------------------------------------------------------
+def _extract_user_id(credentials: HTTPAuthorizationCredentials) -> int | None:
+    payload = _extract_payload(credentials)
+    if not payload or "sub" not in payload:
+        return None
+    try:
+        return int(payload["sub"])
+    except (ValueError, TypeError):
+        return None
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ):
-    """Dependency bắt buộc đăng nhập.
-
-    Luồng kiểm tra:
-        1. Thiếu header Authorization       → 401
-        2. Token sai định dạng / hết hạn    → 401
-        3. user_id trong token không có DB  → 401
-        4. Tài khoản bị khoá (is_active=False) → 403
-
-    Cách dùng trong router:
-        current_user = Depends(get_current_user)
-    """
     from app.crud.user import get_user_by_id  # noqa: PLC0415
 
     _unauth = HTTPException(
@@ -110,12 +67,16 @@ def get_current_user(
         detail="Token không hợp lệ hoặc đã hết hạn",
         headers={"WWW-Authenticate": "Bearer"},
     )
-
     if credentials is None:
         raise _unauth
 
-    user_id = _extract_user_id(credentials)
-    if user_id is None:
+    payload = _extract_payload(credentials)
+    if not payload or "sub" not in payload:
+        raise _unauth
+
+    try:
+        user_id = int(payload["sub"])
+    except (ValueError, TypeError):
         raise _unauth
 
     user = get_user_by_id(db, user_id)
@@ -126,8 +87,10 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Kiểm tra khoá tài khoản SAU khi xác thực token
-    # → tài khoản bị khoá sau khi đăng nhập vẫn bị chặn ngay lần sau
+    token_ver = payload.get("token_ver")
+    if token_ver is not None and getattr(user, "token_version", 1) != token_ver:
+        raise _unauth
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -137,58 +100,37 @@ def get_current_user(
     return user
 
 
-# ---------------------------------------------------------------------------
-# Dependency: get_optional_user
-# ---------------------------------------------------------------------------
-
-
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
 ):
-    """Dependency tuỳ chọn — khách vẫn được phép truy cập.
-
-    - Không có token (khách)        → trả None, không lỗi
-    - Token sai / hết hạn           → trả None, không lỗi
-    - Token hợp lệ nhưng bị khoá   → trả None, không lỗi
-    - Token hợp lệ, tài khoản OK   → trả User object
-
-    Cách dùng trong router:
-        current_user = Depends(get_optional_user)   # có thể là None
-        if current_user:
-            # hiển thị tính năng riêng cho user đã đăng nhập
-    """
     from app.crud.user import get_user_by_id  # noqa: PLC0415
 
     if credentials is None:
         return None
 
-    user_id = _extract_user_id(credentials)
-    if user_id is None:
+    payload = _extract_payload(credentials)
+    if not payload or "sub" not in payload:
+        return None
+
+    try:
+        user_id = int(payload["sub"])
+    except (ValueError, TypeError):
         return None
 
     user = get_user_by_id(db, user_id)
-    # Trả None cho cả: không tìm thấy user và tài khoản bị khoá
     if user is None or not user.is_active:
+        return None
+
+    token_ver = payload.get("token_ver")
+    if token_ver is not None and getattr(user, "token_version", 1) != token_ver:
         return None
 
     return user
 
 
-# ---------------------------------------------------------------------------
-# Dependency factory: role_required
-# ---------------------------------------------------------------------------
-
-
 def role_required(*roles: str) -> Callable:
-    """Factory tạo dependency kiểm tra role.
-
-    Quy tắc lỗi:
-        • Chưa đăng nhập / token không hợp lệ → 401  (do get_current_user)
-        • Tài khoản bị khoá                   → 403  (do get_current_user)
-        • Role không khớp                     → 403
-    """
-
+    """Factory tạo dependency kiểm tra role."""
     def _check(current_user=Depends(get_current_user)):
         if current_user.role not in roles:
             raise HTTPException(

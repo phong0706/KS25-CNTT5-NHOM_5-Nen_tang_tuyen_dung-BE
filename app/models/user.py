@@ -1,7 +1,7 @@
 """Model cho bảng users (đã tạo bằng sql/init.sql, SQLAlchemy chỉ map lại)."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -22,6 +22,7 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Lý do bị admin khoá (NULL = chưa từng khoá / đã mở khoá)
     locked_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
