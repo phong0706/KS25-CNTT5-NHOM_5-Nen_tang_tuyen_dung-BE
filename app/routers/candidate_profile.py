@@ -1,4 +1,5 @@
 """Router hồ sơ ứng viên (/api/candidate/profile)."""
+import datetime
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,6 +18,8 @@ from app.schemas.candidate_profile import (
     CandidateProfileOut,
     CandidateProfilePatch,
     CompletionMissingItem,
+    EducationIn,
+    ExperienceIn,
     ProfileCompletionOut,
     SkillsUpdateIn,
 )
@@ -229,5 +232,187 @@ def update_candidate_skills(
     db.commit()
     db.refresh(profile)
     return _build_profile_out(db, current_user)
+
+
+def _validate_experience_dates(start_month: str, end_month: str | None, is_current: bool):
+    try:
+        s_y, s_m = map(int, start_month.split("-"))
+    except Exception:
+        raise HTTPException(status_code=422, detail="Định dạng tháng bắt đầu không hợp lệ (YYYY-MM)")
+
+    now = datetime.date.today()
+    if s_y > now.year or (s_y == now.year and s_m > now.month):
+        raise HTTPException(status_code=422, detail="Thời gian bắt đầu không được ở tương lai")
+
+    if not is_current:
+        if not end_month:
+            raise HTTPException(status_code=422, detail="Vui lòng chọn tháng kết thúc hoặc đánh dấu 'Tôi đang làm việc tại đây'")
+        try:
+            e_y, e_m = map(int, end_month.split("-"))
+        except Exception:
+            raise HTTPException(status_code=422, detail="Định dạng tháng kết thúc không hợp lệ (YYYY-MM)")
+        if e_y < s_y or (e_y == s_y and e_m < s_m):
+            raise HTTPException(status_code=422, detail="Thời gian kết thúc không được trước thời gian bắt đầu")
+
+
+def _validate_education_dates(start_year: int, end_year: int | None):
+    now_year = datetime.date.today().year
+    if start_year > now_year + 5:
+        raise HTTPException(status_code=422, detail="Năm bắt đầu không hợp lệ")
+    if end_year is not None and end_year < start_year:
+        raise HTTPException(status_code=422, detail="Năm kết thúc không được trước năm bắt đầu")
+
+
+@router.post("/profile/experiences", response_model=CandidateProfileOut)
+def create_candidate_experience(
+    payload: ExperienceIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Thêm một mục kinh nghiệm làm việc."""
+    _validate_experience_dates(payload.start_month, payload.end_month, payload.is_current)
+
+    exp = CandidateExperience(
+        user_id=current_user.id,
+        title=payload.title.strip(),
+        company=payload.company.strip(),
+        start_month=payload.start_month,
+        end_month=None if payload.is_current else payload.end_month,
+        is_current=payload.is_current,
+        description=payload.description.strip() if payload.description else None,
+    )
+    db.add(exp)
+
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
+
+@router.put("/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
+def update_candidate_experience(
+    exp_id: int,
+    payload: ExperienceIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Cập nhật một mục kinh nghiệm làm việc (kiểm tra quyền sở hữu)."""
+    exp = db.get(CandidateExperience, exp_id)
+    if not exp or exp.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mục kinh nghiệm này.")
+
+    _validate_experience_dates(payload.start_month, payload.end_month, payload.is_current)
+
+    exp.title = payload.title.strip()
+    exp.company = payload.company.strip()
+    exp.start_month = payload.start_month
+    exp.end_month = None if payload.is_current else payload.end_month
+    exp.is_current = payload.is_current
+    exp.description = payload.description.strip() if payload.description else None
+
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
+
+@router.delete("/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
+def delete_candidate_experience(
+    exp_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Xóa một mục kinh nghiệm làm việc (kiểm tra quyền sở hữu)."""
+    exp = db.get(CandidateExperience, exp_id)
+    if not exp or exp.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mục kinh nghiệm này.")
+
+    db.delete(exp)
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
+
+@router.post("/profile/educations", response_model=CandidateProfileOut)
+def create_candidate_education(
+    payload: EducationIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Thêm một mục học vấn."""
+    _validate_education_dates(payload.start_year, payload.end_year)
+
+    edu = CandidateEducation(
+        user_id=current_user.id,
+        school=payload.school.strip(),
+        major=payload.major.strip(),
+        degree=payload.degree.strip(),
+        start_year=payload.start_year,
+        end_year=payload.end_year,
+    )
+    db.add(edu)
+
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
+
+@router.put("/profile/educations/{edu_id}", response_model=CandidateProfileOut)
+def update_candidate_education(
+    edu_id: int,
+    payload: EducationIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Cập nhật một mục học vấn (kiểm tra quyền sở hữu)."""
+    edu = db.get(CandidateEducation, edu_id)
+    if not edu or edu.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mục học vấn này.")
+
+    _validate_education_dates(payload.start_year, payload.end_year)
+
+    edu.school = payload.school.strip()
+    edu.major = payload.major.strip()
+    edu.degree = payload.degree.strip()
+    edu.start_year = payload.start_year
+    edu.end_year = payload.end_year
+
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
+
+@router.delete("/profile/educations/{edu_id}", response_model=CandidateProfileOut)
+def delete_candidate_education(
+    edu_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Xóa một mục học vấn (kiểm tra quyền sở hữu)."""
+    edu = db.get(CandidateEducation, edu_id)
+    if not edu or edu.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mục học vấn này.")
+
+    db.delete(edu)
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+    db.add(profile)
+    db.commit()
+
+    return _build_profile_out(db, current_user)
+
 
 

@@ -77,3 +77,20 @@ class SkillsUpdateIn(BaseModel):
     version: int | None = None
 
 
+class ExperienceIn(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    company: str = Field(min_length=2, max_length=200)
+    start_month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    end_month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    is_current: bool = False
+    description: str | None = Field(default=None, max_length=2000)
+
+
+class EducationIn(BaseModel):
+    school: str = Field(min_length=2, max_length=200)
+    major: str = Field(min_length=2, max_length=200)
+    degree: str = Field(min_length=2, max_length=120)
+    start_year: int = Field(ge=1970, le=2035)
+    end_year: int | None = Field(default=None, ge=1970, le=2040)
+
+
