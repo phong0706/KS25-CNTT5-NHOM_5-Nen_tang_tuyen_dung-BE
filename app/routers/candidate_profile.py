@@ -1,4 +1,4 @@
-"""Router hồ sơ ứng viên (/api/candidate/profile)."""
+"""Router quản lý hồ sơ ứng viên (/api/candidate/profile và /api/profiles)."""
 import datetime
 import io
 import json
@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import role_required
+from app.core.permissions import is_owner_or_admin, require_owner
+from app.core.security import get_current_user, get_optional_user, role_required
+from app.crud import candidate_profile as profile_crud
 from app.db.session import get_db
 from app.models.candidate_profile import (
     CandidateEducation,
@@ -27,8 +29,28 @@ from app.schemas.candidate_profile import (
     ProfileCompletionOut,
     SkillsUpdateIn,
 )
+from app.schemas.candidate_schema import (
+    CandidateProfileCreate,
+    CandidateProfileOut as CandidateProfileDetailOut,
+    CandidateProfileUpdate,
+    CandidateSkillCreate,
+    CandidateSkillOut,
+    CandidateSkillUpdate,
+    EducationCreate,
+    EducationOut,
+    EducationUpdate,
+    ExperienceCreate,
+    ExperienceOut,
+    ExperienceUpdate,
+)
 
-router = APIRouter(prefix="/candidate", tags=["Candidate Profile"])
+# Không gắn prefix cố định ở router để phục vụ đồng thời cả /candidate/... và /profiles/...
+router = APIRouter(tags=["Candidate Profile"])
+
+
+# ===========================================================================
+# PHẦN 1: API HỒ SƠ ỨNG VIÊN (/api/candidate/profile - nhánh feat/T3D36B4)
+# ===========================================================================
 
 
 def _parse_skills(skills_json: str | None) -> list[str]:
@@ -146,7 +168,7 @@ def _build_profile_out(db: Session, user: User) -> CandidateProfileOut:
     )
 
 
-@router.get("/profile", response_model=CandidateProfileOut)
+@router.get("/candidate/profile", response_model=CandidateProfileOut)
 def get_candidate_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required("candidate")),
@@ -154,7 +176,7 @@ def get_candidate_profile(
     return _build_profile_out(db, current_user)
 
 
-@router.patch("/profile", response_model=CandidateProfileOut)
+@router.patch("/candidate/profile", response_model=CandidateProfileOut)
 def patch_candidate_profile(
     payload: CandidateProfilePatch,
     db: Session = Depends(get_db),
@@ -201,7 +223,7 @@ def patch_candidate_profile(
     return _build_profile_out(db, current_user)
 
 
-@router.put("/profile/skills", response_model=CandidateProfileOut)
+@router.put("/candidate/profile/skills", response_model=CandidateProfileOut)
 def update_candidate_skills(
     payload: SkillsUpdateIn,
     db: Session = Depends(get_db),
@@ -267,7 +289,7 @@ def _validate_education_dates(start_year: int, end_year: int | None):
         raise HTTPException(status_code=422, detail="Năm kết thúc không được trước năm bắt đầu")
 
 
-@router.post("/profile/experiences", response_model=CandidateProfileOut)
+@router.post("/candidate/profile/experiences", response_model=CandidateProfileOut)
 def create_candidate_experience(
     payload: ExperienceIn,
     db: Session = Depends(get_db),
@@ -295,7 +317,7 @@ def create_candidate_experience(
     return _build_profile_out(db, current_user)
 
 
-@router.put("/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
+@router.put("/candidate/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
 def update_candidate_experience(
     exp_id: int,
     payload: ExperienceIn,
@@ -324,7 +346,7 @@ def update_candidate_experience(
     return _build_profile_out(db, current_user)
 
 
-@router.delete("/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
+@router.delete("/candidate/profile/experiences/{exp_id}", response_model=CandidateProfileOut)
 def delete_candidate_experience(
     exp_id: int,
     db: Session = Depends(get_db),
@@ -344,7 +366,7 @@ def delete_candidate_experience(
     return _build_profile_out(db, current_user)
 
 
-@router.post("/profile/educations", response_model=CandidateProfileOut)
+@router.post("/candidate/profile/educations", response_model=CandidateProfileOut)
 def create_candidate_education(
     payload: EducationIn,
     db: Session = Depends(get_db),
@@ -371,7 +393,7 @@ def create_candidate_education(
     return _build_profile_out(db, current_user)
 
 
-@router.put("/profile/educations/{edu_id}", response_model=CandidateProfileOut)
+@router.put("/candidate/profile/educations/{edu_id}", response_model=CandidateProfileOut)
 def update_candidate_education(
     edu_id: int,
     payload: EducationIn,
@@ -399,7 +421,7 @@ def update_candidate_education(
     return _build_profile_out(db, current_user)
 
 
-@router.delete("/profile/educations/{edu_id}", response_model=CandidateProfileOut)
+@router.delete("/candidate/profile/educations/{edu_id}", response_model=CandidateProfileOut)
 def delete_candidate_education(
     edu_id: int,
     db: Session = Depends(get_db),
@@ -437,7 +459,7 @@ def _validate_image_magic_bytes(header: bytes) -> str:
     )
 
 
-@router.post("/profile/avatar", response_model=CandidateProfileOut)
+@router.post("/candidate/profile/avatar", response_model=CandidateProfileOut)
 async def upload_candidate_avatar(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -494,7 +516,7 @@ async def upload_candidate_avatar(
     return _build_profile_out(db, current_user)
 
 
-@router.delete("/profile/avatar", response_model=CandidateProfileOut)
+@router.delete("/candidate/profile/avatar", response_model=CandidateProfileOut)
 def delete_candidate_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required("candidate")),
@@ -513,5 +535,317 @@ def delete_candidate_avatar(
     return _build_profile_out(db, current_user)
 
 
+# ===========================================================================
+# PHẦN 2: API QUẢN LÝ HỒ SƠ CHI TIẾT (/api/profiles - nhánh develop)
+# ===========================================================================
 
 
+def _check_profile_ownership(profile_id: int, current_user: User, db: Session):
+    """Kiểm tra quyền sở hữu hồ sơ. Raise 404/403 nếu không hợp lệ."""
+    profile = profile_crud.get_profile_by_id(db, profile_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hồ sơ",
+        )
+
+    require_owner(profile.user_id, current_user)
+    return profile
+
+
+@router.get("/profiles/me", response_model=CandidateProfileDetailOut, summary="Xem hồ sơ của mình")
+def get_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lấy hồ sơ của user đang đăng nhập (kèm skills, experiences, educations, cvs)."""
+    profile = profile_crud.get_profile_by_user_id(db, current_user.id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bạn chưa có hồ sơ. Hãy tạo hồ sơ trước.",
+        )
+    return profile
+
+
+@router.get("/profiles/{profile_id}", response_model=CandidateProfileDetailOut, summary="Xem hồ sơ")
+def get_profile(
+    profile_id: int,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Xem hồ sơ ứng viên.
+
+    - Hồ sơ công khai (is_public=True) → mọi người (kể cả khách) xem được
+    - Hồ sơ riêng tư (is_public=False) → chỉ chủ hồ sơ hoặc admin xem được, người khác trả 403
+    """
+    profile = profile_crud.get_profile_by_id(db, profile_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hồ sơ",
+        )
+
+    if not profile.is_public:
+        if current_user is None or not is_owner_or_admin(profile.user_id, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Hồ sơ này ở chế độ riêng tư",
+            )
+
+    return profile
+
+
+@router.post(
+    "/profiles",
+    response_model=CandidateProfileDetailOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Tạo hồ sơ mới",
+)
+def create_profile(
+    data: CandidateProfileCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Tạo hồ sơ ứng viên mới.
+
+    - Mỗi user chỉ có 1 hồ sơ duy nhất
+    - data.user_id phải khớp với current_user.id
+    """
+    if data.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn chỉ có thể tạo hồ sơ cho chính mình",
+        )
+
+    existing = profile_crud.get_profile_by_user_id(db, data.user_id)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bạn đã có hồ sơ rồi. Dùng PUT /profiles/{id} để cập nhật.",
+        )
+
+    profile = profile_crud.create_profile(db, data)
+    return profile
+
+
+@router.put(
+    "/profiles/{profile_id}", response_model=CandidateProfileDetailOut, summary="Cập nhật hồ sơ"
+)
+def update_profile(
+    profile_id: int,
+    data: CandidateProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cập nhật thông tin hồ sơ. Chỉ chủ hồ sơ hoặc admin mới được phép sửa."""
+    profile = _check_profile_ownership(profile_id, current_user, db)
+    updated = profile_crud.update_profile(db, profile, data)
+    return updated
+
+
+@router.post(
+    "/profiles/{profile_id}/skills",
+    response_model=CandidateSkillOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Thêm kỹ năng",
+)
+def add_skill(
+    profile_id: int,
+    data: CandidateSkillCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Thêm kỹ năng cho hồ sơ. Chỉ chủ hồ sơ mới được phép thêm."""
+    _check_profile_ownership(profile_id, current_user, db)
+    skill = profile_crud.add_skill(db, profile_id, data)
+    return skill
+
+
+@router.put(
+    "/profiles/{profile_id}/skills/{skill_id}",
+    response_model=CandidateSkillOut,
+    summary="Sửa kỹ năng",
+)
+def update_skill(
+    profile_id: int,
+    skill_id: int,
+    data: CandidateSkillUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cập nhật kỹ năng. Chỉ chủ hồ sơ mới được phép sửa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    skill = profile_crud.get_skill_by_id(db, skill_id)
+    if not skill or skill.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy kỹ năng",
+        )
+
+    updated = profile_crud.update_skill(db, skill, data)
+    return updated
+
+
+@router.delete(
+    "/profiles/{profile_id}/skills/{skill_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Xóa kỹ năng",
+)
+def delete_skill(
+    profile_id: int,
+    skill_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Xóa kỹ năng. Chỉ chủ hồ sơ mới được phép xóa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    skill = profile_crud.get_skill_by_id(db, skill_id)
+    if not skill or skill.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy kỹ năng",
+        )
+
+    profile_crud.delete_skill(db, skill)
+    return None
+
+
+@router.post(
+    "/profiles/{profile_id}/experiences",
+    response_model=ExperienceOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Thêm kinh nghiệm",
+)
+def add_experience(
+    profile_id: int,
+    data: ExperienceCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Thêm kinh nghiệm làm việc. Chỉ chủ hồ sơ mới được phép thêm."""
+    _check_profile_ownership(profile_id, current_user, db)
+    experience = profile_crud.add_experience(db, profile_id, data)
+    return experience
+
+
+@router.put(
+    "/profiles/{profile_id}/experiences/{exp_id}",
+    response_model=ExperienceOut,
+    summary="Sửa kinh nghiệm",
+)
+def update_experience(
+    profile_id: int,
+    exp_id: int,
+    data: ExperienceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cập nhật kinh nghiệm. Chỉ chủ hồ sơ mới được phép sửa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    experience = profile_crud.get_experience_by_id(db, exp_id)
+    if not experience or experience.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy kinh nghiệm",
+        )
+
+    updated = profile_crud.update_experience(db, experience, data)
+    return updated
+
+
+@router.delete(
+    "/profiles/{profile_id}/experiences/{exp_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Xóa kinh nghiệm",
+)
+def delete_experience(
+    profile_id: int,
+    exp_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Xóa kinh nghiệm. Chỉ chủ hồ sơ mới được phép xóa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    experience = profile_crud.get_experience_by_id(db, exp_id)
+    if not experience or experience.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy kinh nghiệm",
+        )
+
+    profile_crud.delete_experience(db, experience)
+    return None
+
+
+@router.post(
+    "/profiles/{profile_id}/educations",
+    response_model=EducationOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Thêm học vấn",
+)
+def add_education(
+    profile_id: int,
+    data: EducationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Thêm học vấn. Chỉ chủ hồ sơ mới được phép thêm."""
+    _check_profile_ownership(profile_id, current_user, db)
+    education = profile_crud.add_education(db, profile_id, data)
+    return education
+
+
+@router.put(
+    "/profiles/{profile_id}/educations/{edu_id}",
+    response_model=EducationOut,
+    summary="Sửa học vấn",
+)
+def update_education(
+    profile_id: int,
+    edu_id: int,
+    data: EducationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cập nhật học vấn. Chỉ chủ hồ sơ mới được phép sửa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    education = profile_crud.get_education_by_id(db, edu_id)
+    if not education or education.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy học vấn",
+        )
+
+    updated = profile_crud.update_education(db, education, data)
+    return updated
+
+
+@router.delete(
+    "/profiles/{profile_id}/educations/{edu_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Xóa học vấn",
+)
+def delete_education(
+    profile_id: int,
+    edu_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Xóa học vấn. Chỉ chủ hồ sơ mới được phép xóa."""
+    _check_profile_ownership(profile_id, current_user, db)
+
+    education = profile_crud.get_education_by_id(db, edu_id)
+    if not education or education.profile_id != profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy học vấn",
+        )
+
+    profile_crud.delete_education(db, education)
+    return None

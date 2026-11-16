@@ -1,25 +1,56 @@
 """Điểm khởi động của backend.
 
-Chạy:  uvicorn app.main:app --reload
-Tài liệu API tự sinh: http://127.0.0.1:8000/docs
+Chạy: uvicorn app.main:app --reload
+Tài liệu API: http://127.0.0.1:8000/docs
 """
 import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 
-from app import models  # noqa: F401 - import để SQLAlchemy biết các bảng
+from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.session import Base, engine
 from app.routers import (
-    admin_applications, admin_interview, auth, candidate_applications, candidate_apply, candidate_cv_documents, candidate_detail,
-    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_applications, employer_interviews, employer_jobs, health, items, meta, public_jobs, users,
-    nav_meta, tools, interview, candidate_cover_letters, matching, search_insights,
-    salary_insights, notifications,
+    admin_applications,
+    admin_interview,
+    applications,
+    auth,
+    candidate_applications,
+    candidate_apply,
+    candidate_cover_letters,
+    candidate_cv_documents,
+    candidate_detail,
+    candidate_profile,
+    candidate_recommended,
+    candidate_saved_jobs,
+    companies,
+    company,
+    cv,
+    employer_applications,
+    employer_interviews,
+    employer_jobs,
+    health,
+    industries,
+    interview,
+    items,
+    jobs,
+    locations,
+    matching,
+    meta,
+    nav_meta,
+    notifications,
+    public_jobs,
+    salary_insights,
+    search_insights,
+    skills,
+    tools,
+    users,
 )
 
 # Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
@@ -39,10 +70,18 @@ def _log(message: str) -> None:
         print(message.encode("utf-8", "replace").decode("ascii", "replace"))
 
 
+# Đảm bảo thư mục upload tồn tại trước khi mount StaticFiles
+upload_dir_path = Path(settings.UPLOAD_DIR)
+upload_dir_path.mkdir(parents=True, exist_ok=True)
+(upload_dir_path / "avatars").mkdir(parents=True, exist_ok=True)
+
+cv_upload_dir_str = getattr(settings, "CV_UPLOAD_DIR", None)
+if cv_upload_dir_str:
+    Path(cv_upload_dir_str).mkdir(parents=True, exist_ok=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tự tạo các bảng còn thiếu khi server khởi động (bảng đã có thì bỏ qua).
-    # Lưu ý: create_all KHÔNG sửa bảng đã tồn tại. Đổi cột -> sửa bằng SQL hoặc xoá bảng tạo lại.
     try:
         Base.metadata.create_all(bind=engine)
         _log(f"[DB] Đã kết nối MySQL {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
@@ -51,12 +90,16 @@ async def lifespan(app: FastAPI):
         if "Unknown database" in str(error.orig):
             _log("[DB] Chưa có database -> mở MySQL Workbench, chạy file sql/init.sql")
         _log(f"[DB] Chi tiết: {error.orig}")
+
+    _log(f"[Upload] Thư mục lưu ảnh/CV: {upload_dir_path.resolve()}")
+    if cv_upload_dir_str:
+        _log(f"[CV Upload] Thư mục lưu CV: {Path(cv_upload_dir_str).resolve()}")
+
     yield
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
-# CORS: cho phép trang FE (khác cổng/khác domain) gọi được API này
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -64,22 +107,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mọi API đều bắt đầu bằng /api. Thêm router mới thì include ở đây.
+# Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py & avatars)
+app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
+# Đăng ký toàn bộ router
 app.include_router(health.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(companies.router, prefix="/api")
+app.include_router(company.router, prefix="/api")
 app.include_router(candidate_profile.router, prefix="/api")
+app.include_router(cv.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
+app.include_router(industries.router, prefix="/api")
+app.include_router(locations.router, prefix="/api")
+app.include_router(skills.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
 app.include_router(employer_interviews.router, prefix="/api")
-# search_insights PHẢI được đăng ký TRƯỚC public_jobs:
-# public_jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
+
+# search_insights PHẢI được đăng ký TRƯỚC public_jobs và jobs:
+# public_jobs / jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
 # khớp "relaxed" vào job_id và trả 422 thay vì gọi tới /api/jobs/relaxed.
 app.include_router(search_insights.router)
 app.include_router(public_jobs.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
+
+app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
@@ -98,12 +154,7 @@ app.include_router(salary_insights.router, prefix="/api")
 # Thông báo dùng chung (chuông thông báo trên header FE)
 app.include_router(notifications.router, prefix="/api")
 
-# Static files: uploads (avatars, documents, etc.)
-UPLOADS_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(os.path.join(UPLOADS_ROOT, "avatars"), exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOADS_ROOT), name="uploads")
-
 
 @app.get("/")
 def root():
-    return {"message": f"{settings.APP_NAME} đang chạy. Xem tài liệu API tại /docs"}
+    return {"message": f"{settings.APP_NAME} is running. API docs at /docs"}

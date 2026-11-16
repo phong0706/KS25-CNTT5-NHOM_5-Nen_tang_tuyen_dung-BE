@@ -1,4 +1,5 @@
 """Models cho danh mục meta, tin tuyển dụng (jobs) và hồ sơ ứng tuyển (job_applications)."""
+
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -65,9 +66,12 @@ class MetaSkill(Base):
 
 
 class Job(Base):
+    """Model Job - Tin tuyển dụng của doanh nghiệp."""
+
     __tablename__ = "jobs"
     __table_args__ = (
         Index("idx_jobs_employer_id", "employer_id"),
+        Index("idx_jobs_company_id", "company_id"),
         Index("idx_jobs_status", "status"),
         Index("idx_jobs_location_id", "location_id"),
         Index("idx_jobs_level_id", "level_id"),
@@ -95,6 +99,7 @@ class Job(Base):
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("meta_categories.id", ondelete="SET NULL"), nullable=True
     )
+    
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     level: Mapped[str | None] = mapped_column(String(100), nullable=True)
     work_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -152,4 +157,3 @@ class SavedJob(Base):
         ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-

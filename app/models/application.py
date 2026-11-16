@@ -1,49 +1,100 @@
 """Models cho hồ sơ ứng tuyển: CV, Application, lịch sử trạng thái, nháp thư, mẫu thư."""
 from datetime import datetime
+from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
 
+class ApplicationStatus(str, Enum):
+    """Trạng thái đơn ứng tuyển."""
+
+    SUBMITTED = "SUBMITTED"      # Đã nộp
+    REVIEWING = "REVIEWING"      # Đang xem xét
+    INTERVIEW = "INTERVIEW"      # Mời phỏng vấn
+    OFFERED = "OFFERED"          # Đã nhận offer
+    REJECTED = "REJECTED"        # Bị từ chối
+    WITHDRAWN = "WITHDRAWN"      # Ứng viên rút đơn
+
+
 class CV(Base):
     __tablename__ = "cvs"
-    __table_args__ = (Index("idx_cvs_candidate_id", "candidate_id"),)
+    __table_args__ = (
+        Index("idx_cvs_candidate_id", "candidate_id"),
+        {"extend_existing": True},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    candidate_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
-    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    stored_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stored_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_default: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Application(Base):
+    """Đơn ứng tuyển - liên kết ứng viên với tin tuyển dụng."""
+
     __tablename__ = "applications"
     __table_args__ = (
         Index("idx_apps_candidate_id", "candidate_id"),
         Index("idx_apps_status", "status"),
         Index("idx_apps_created_at", "created_at"),
+        UniqueConstraint(
+            "candidate_profile_id", "job_id", name="uq_application_candidate_job"
+        ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    candidate_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+
+    # Ứng viên nộp đơn (hỗ trợ cả user_id từ feat và candidate_profile_id từ develop)
+    candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
+    candidate_profile_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("candidate_profiles.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    # Tin tuyển dụng được ứng tuyển
     job_id: Mapped[int] = mapped_column(
-        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
+    # CV đính kèm
     cv_id: Mapped[int | None] = mapped_column(
-        ForeignKey("cvs.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("cvs.id", ondelete="SET NULL"), nullable=True
     )
-    cv_name_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
+    cv_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Thư giới thiệu & ghi chú
     cover_letter: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    employer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Trạng thái đơn ứng tuyển
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=ApplicationStatus.SUBMITTED.value,
+        nullable=False,
+    )
     active_flag: Mapped[int | None] = mapped_column(Integer, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
     withdraw_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -52,6 +103,7 @@ class Application(Base):
     interview_mode: Mapped[str | None] = mapped_column(String(80), nullable=True)
     interview_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -60,7 +112,10 @@ class Application(Base):
 
 class ApplicationStatusHistory(Base):
     __tablename__ = "application_status_history"
-    __table_args__ = (Index("idx_ash_app_id", "application_id"),)
+    __table_args__ = (
+        Index("idx_ash_app_id", "application_id"),
+        {"extend_existing": True},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     application_id: Mapped[int] = mapped_column(
@@ -158,6 +213,7 @@ class Interview(Base):
         Index("idx_interviews_app_id", "application_id"),
         Index("idx_interviews_scheduled_at", "scheduled_at"),
         Index("idx_interviews_created_by", "created_by"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -172,8 +228,8 @@ class Interview(Base):
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled")
     cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_by: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -188,5 +244,3 @@ class MetaRejectionReason(Base):
     slug: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-
-

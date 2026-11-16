@@ -1,8 +1,7 @@
 -- Khởi tạo database app_db + bảng users + companies + dữ liệu mẫu.
 -- Cách chạy bằng MySQL Workbench:
 --   File > Open SQL Script... > chọn file này > bấm nút tia sét (Execute) > Refresh SCHEMAS.
---
--- ĐỂ RESET SẠCH: bỏ comment 2 dòng DROP TABLE bên dưới rồi chạy lại.
+-- Chạy lại nhiều lần không lỗi (đã có thì bỏ qua).
 
 SET NAMES utf8mb4;
 
@@ -10,28 +9,22 @@ CREATE DATABASE IF NOT EXISTS app_db
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE app_db;
 
--- Bỏ comment để reset sạch dữ liệu:
--- DROP TABLE IF EXISTS companies;
--- DROP TABLE IF EXISTS users;
+CREATE TABLE IF NOT EXISTS users(
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    role ENUM('candidate', 'employer', 'admin') NOT NULL DEFAULT 'candidate',
+    avatar_url VARCHAR(500),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    locked_reason VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
--- ------------------------------------------------------------------ --
--- Bảng users
--- ------------------------------------------------------------------ --
-CREATE TABLE IF NOT EXISTS users (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    email       VARCHAR(255) NOT NULL UNIQUE,
-    password    VARCHAR(255) NOT NULL,
-    full_name   VARCHAR(255) NOT NULL,
-    phone       VARCHAR(20),
-    role        ENUM('candidate', 'employer', 'admin') NOT NULL DEFAULT 'candidate',
-    avatar_url  VARCHAR(500),
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-    INDEX idx_email     (email),
-    INDEX idx_role      (role),
+    INDEX idx_email (email),
+    INDEX idx_role (role),
     INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -52,21 +45,7 @@ CREATE TABLE IF NOT EXISTS companies (
 
 -- ------------------------------------------------------------------ --
 -- Dữ liệu mẫu: users
--- Password đã bcrypt (rounds=12). Plain text xem bảng bên dưới.
---
---  Email                  | Password (plain) | Role
---  -----------------------|------------------|----------
---  admin@tuyendung.com    | admin123@        | admin
---  hr1@tuyendung.com      | hr1@             | employer
---  hr2@tuyendung.com      | hr2@             | employer
---  hr3@tuyendung.com      | hr3@             | employer
---  hr5@tuyendung.com      | hr5@             | employer
---  ungvien1@gmail.com     | ungvien1@        | candidate
---  ungvien2@gmail.com     | ungvien2@        | candidate
---  ungvien3@gmail.com     | ungvien3@        | candidate
---  ungvien4@gmail.com     | ungvien4@        | candidate
---  ungvien5@gmail.com     | ungvien5@        | candidate
---  ungvien15@gmail.com    | ungvien15@       | candidate
+-- Password đã bcrypt (rounds=12). Plain text tương ứng.
 -- ------------------------------------------------------------------ --
 INSERT INTO users (email, password, full_name, phone, role, is_active, is_verified) VALUES
 
@@ -76,52 +55,95 @@ INSERT INTO users (email, password, full_name, phone, role, is_active, is_verifi
  'System Admin', '0901234567', 'admin', TRUE, TRUE),
 
 -- Nhà tuyển dụng
+('employer0@tuyendung.com',
+ '$2b$12$rvnEOqdsVorbZw.ju0PzpurPsVG0O5dsjzdl/beMhITgvqVYztz9W',
+ 'Nguyễn Tấn Phong', '0912345678', 'employer', TRUE, TRUE),
+
 ('hr1@tuyendung.com',
  '$2b$12$rvnEOqdsVorbZw.ju0PzpurPsVG0O5dsjzdl/beMhITgvqVYztz9W',
- 'Trần Thị Bình', '0912345678', 'employer', TRUE, TRUE),
+ 'Trần Thị Bình', '0923456789', 'employer', TRUE, TRUE),
 
 ('hr2@tuyendung.com',
  '$2b$12$SihYzvVfoZpRwbfk0OOfROLNeGNM.f8ZaMP/cE4Xie8FkVTkMp07i',
- 'Lê Văn Cường', '0923456789', 'employer', TRUE, FALSE),
+ 'Lê Văn Cường', '0934567890', 'employer', TRUE, FALSE),
 
 ('hr3@tuyendung.com',
  '$2b$12$CMbnNMubGhH5ZsQeM2F6TOp3kAAd2R6xaO90z3VKck0isX9T8x89C',
- 'Nguyễn Thị Dung', '0934567890', 'employer', TRUE, TRUE),
+ 'Lê Văn Liêm', '0932562890', 'employer', TRUE, FALSE),
+
+('hr4@tuyendung.com',
+ '$2b$12$CMbnNMubGhH5ZsQeM2F6TOp3kAAd2R6xaO90z3VKck0isX9T8x89C',
+ 'Lê Quang Hùng', '0961738289', 'employer', TRUE, FALSE),
 
 ('hr5@tuyendung.com',
  '$2b$12$K3JTG.xfwnw07lO/paT2Q.XPWgoIpH5K7nNYur3qZVSi2KD83U3Ge',
- 'Phạm Quốc Hùng', '0945678901', 'employer', TRUE, FALSE),
+ 'Nguyễn Thị Tươi', '0934567890', 'employer', TRUE, FALSE),
 
 -- Ứng viên
 ('ungvien1@gmail.com',
  '$2b$12$I8B6cNsYsGn3245rCkKcXeQmQrlFxJ1KbfEskpdxiLml1Flr4pS/m',
- 'Phạm Minh Đức', '0956789012', 'candidate', TRUE, TRUE),
+ 'Phạm Minh Đức', '0945678901', 'candidate', TRUE, TRUE),
 
 ('ungvien2@gmail.com',
  '$2b$12$EyAuxlInwlmQ268.KRtsoO4mT0xRmLsKpH5VuCf92lsGezrWjK9fi',
- 'Hoàng Thu Hà', '0967890123', 'candidate', TRUE, TRUE),
+ 'Hoàng Thu Hà', '0956789012', 'candidate', TRUE, TRUE),
 
 ('ungvien3@gmail.com',
  '$2b$12$y/biG5MG7CX6sJOBDVXL2uIAu5J1DlBfiaL5iGdI0yRPK9EumH6ym',
- 'Vũ Tuấn Kiệt', '0978901234', 'candidate', TRUE, FALSE),
+ 'Vũ Tuấn Kiệt', '0967890123', 'candidate', TRUE, FALSE),
 
 ('ungvien4@gmail.com',
  '$2b$12$rM6Fy1JJDTOQlNNEm6bXS.PVUlhOkQ2Ov18J.Pu7zSFocMI.YP2Tq',
- 'Đỗ Lan Anh', '0989012345', 'candidate', FALSE, TRUE),
+ 'Đỗ Lan Anh', '0978901234', 'candidate', FALSE, TRUE),
 
 ('ungvien5@gmail.com',
  '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
- 'Bùi Văn Em', '0990123456', 'candidate', TRUE, FALSE),
+ 'Nguyễn Văn An', '0989012345', 'candidate', TRUE, TRUE),
+
+('ungvien6@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Trần Thị Mai', '0901234567', 'candidate', TRUE, FALSE),
+
+('ungvien7@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Lê Hoàng Nam', '0912345678', 'candidate', FALSE, TRUE),
+
+('ungvien8@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Phan Thanh Tùng', '0923456789', 'candidate', TRUE, TRUE),
+
+('ungvien9@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Bùi Thị Hương', '0934567890', 'candidate', FALSE, FALSE),
+
+('ungvien10@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Đặng Quốc Anh', '0941234567', 'candidate', TRUE, TRUE),
+
+('ungvien11@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Trịnh Bảo Ngọc', '0952345678', 'candidate', TRUE, FALSE),
+
+('ungvien12@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Ngô Gia Huy', '0963456789', 'candidate', TRUE, TRUE),
+
+('ungvien13@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Dương Thảo Linh', '0974567890', 'candidate', FALSE, TRUE),
+
+('ungvien14@gmail.com',
+ '$2b$12$DM0efAfFmp5Zr9Cn6Yl6Huc7UsaE6qyVVPri8N7.Qpv5vmfh/XB6K',
+ 'Lý Minh Trí', '0985678901', 'candidate', TRUE, TRUE),
 
 ('ungvien15@gmail.com',
  '$2b$12$J84tu091we6y0sn82rq7XuFfQbWyw4QCv6qd9zTER3UbzvUqMylxe',
- 'Trịnh Thị Phương', '0901234568', 'candidate', TRUE, TRUE)
+ 'Nguyễn Khánh Vân', '0996789012', 'candidate', TRUE, FALSE)
 
-ON DUPLICATE KEY UPDATE email = email; -- Không thêm trùng nếu chạy lại
+ON DUPLICATE KEY UPDATE email = email;
 
 -- ------------------------------------------------------------------ --
 -- Dữ liệu mẫu: companies (công ty của từng employer)
--- Dùng subquery để không cần biết trước id của user.
 -- ------------------------------------------------------------------ --
 INSERT INTO companies (name, employer_id, is_draft)
 SELECT 'Công ty TNHH Giải Pháp Số ABC', id, FALSE FROM users WHERE email = 'hr1@tuyendung.com'
@@ -137,4 +159,3 @@ SELECT 'Startup GHI Innovation', id, TRUE  FROM users WHERE email = 'hr5@tuyendu
 -- ------------------------------------------------------------------ --
 SELECT id, email, full_name, role, is_active, is_verified FROM users;
 SELECT id, name, employer_id, is_draft FROM companies;
-

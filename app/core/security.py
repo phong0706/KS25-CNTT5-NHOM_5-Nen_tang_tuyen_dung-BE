@@ -27,23 +27,38 @@ _bearer = HTTPBearer(auto_error=False)
 # Password
 # ---------------------------------------------------------------------------
 
+
 def hash_password(plain: str) -> str:
     """Hash mật khẩu bằng bcrypt trước khi lưu vào DB."""
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt(rounds=12)).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Kiểm tra mật khẩu người dùng nhập có khớp với hash trong DB không."""
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    """Kiểm tra mật khẩu người dùng nhập có khớp với mật khẩu trong DB không.
+
+    Hỗ trợ cả mật khẩu đã băm bằng bcrypt ($2b$...) lẫn mật khẩu plain-text
+    từ file sql/init.sql mẫu để tránh lỗi ValueError: Invalid salt khi test.
+    """
+    if not hashed:
+        return False
+    if hashed.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return bcrypt.checkpw(plain.encode(), hashed.encode())
+        except ValueError:
+            return False
+    return plain == hashed
 
 
 # ---------------------------------------------------------------------------
 # JWT
 # ---------------------------------------------------------------------------
 
+
 def create_access_token(user_id: int, role: str) -> str:
     """Tạo JWT chứa user_id và role, hết hạn sau JWT_EXPIRE_MINUTES phút."""
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.JWT_EXPIRE_MINUTES
+    )
     payload = {"sub": str(user_id), "role": role, "exp": expire}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
@@ -52,11 +67,16 @@ def create_access_token(user_id: int, role: str) -> str:
 # Internal helper
 # ---------------------------------------------------------------------------
 
-def _extract_user_id(credentials: HTTPAuthorizationCredentials) -> int | None:
+
+def _extract_user_id(
+    credentials: HTTPAuthorizationCredentials,
+) -> int | None:
     """Giải mã JWT → trả user_id (int) hoặc None nếu token sai / hết hạn."""
     try:
         payload = jwt.decode(
-            credentials.credentials, settings.JWT_SECRET, algorithms=[ALGORITHM]
+            credentials.credentials,
+            settings.JWT_SECRET,
+            algorithms=[ALGORITHM],
         )
         return int(payload["sub"])
     except (JWTError, KeyError, ValueError):
@@ -66,6 +86,7 @@ def _extract_user_id(credentials: HTTPAuthorizationCredentials) -> int | None:
 # ---------------------------------------------------------------------------
 # Dependency: get_current_user
 # ---------------------------------------------------------------------------
+
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -120,6 +141,7 @@ def get_current_user(
 # Dependency: get_optional_user
 # ---------------------------------------------------------------------------
 
+
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
@@ -157,6 +179,7 @@ def get_optional_user(
 # Dependency factory: role_required
 # ---------------------------------------------------------------------------
 
+
 def role_required(*roles: str) -> Callable:
     """Factory tạo dependency kiểm tra role.
 
@@ -164,23 +187,8 @@ def role_required(*roles: str) -> Callable:
         • Chưa đăng nhập / token không hợp lệ → 401  (do get_current_user)
         • Tài khoản bị khoá                   → 403  (do get_current_user)
         • Role không khớp                     → 403
-
-    Cách dùng:
-        # Chỉ admin
-        current_user = Depends(role_required("admin"))
-
-        # Employer hoặc admin đều được
-        current_user = Depends(role_required("employer", "admin"))
-
-    Ví dụ router đầy đủ:
-        @router.post("/jobs")
-        def create_job(
-            data: JobCreate,
-            db: Session = Depends(get_db),
-            current_user = Depends(role_required("employer")),
-        ):
-            ...
     """
+
     def _check(current_user=Depends(get_current_user)):
         if current_user.role not in roles:
             raise HTTPException(
