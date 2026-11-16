@@ -14,10 +14,10 @@ from app import models  # noqa: F401 - import để SQLAlchemy biết các bản
 from app.core.config import settings
 from app.db.session import Base, engine
 from app.routers import (
-    admin_interview, auth, candidate_applications, candidate_apply, candidate_cv_documents, candidate_detail,
-    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_jobs, health, items, meta, public_jobs, users,
+    admin_applications, admin_interview, auth, candidate_applications, candidate_apply, candidate_cv_documents, candidate_detail,
+    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_applications, employer_jobs, health, items, meta, public_jobs, users,
     nav_meta, tools, interview, candidate_cover_letters, matching, search_insights,
-    salary_insights,
+    salary_insights, notifications,
 )
 
 # Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
@@ -71,6 +71,7 @@ app.include_router(companies.router, prefix="/api")
 app.include_router(candidate_profile.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
+app.include_router(employer_applications.router, prefix="/api")
 # search_insights PHẢI được đăng ký TRƯỚC public_jobs:
 # public_jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
 # khớp "relaxed" vào job_id và trả 422 thay vì gọi tới /api/jobs/relaxed.
@@ -85,11 +86,14 @@ app.include_router(nav_meta.router)
 app.include_router(tools.router, prefix="/api")
 app.include_router(interview.router, prefix="/api")
 app.include_router(admin_interview.router, prefix="/api")
+app.include_router(admin_applications.router, prefix="/api")
 app.include_router(candidate_cover_letters.router, prefix="/api")
 app.include_router(candidate_cv_documents.router, prefix="/api")
 app.include_router(matching.router)
 # salary_insights dùng prefix "/salary" -> gắn thêm "/api" để ra /api/salary/insights
 app.include_router(salary_insights.router, prefix="/api")
+# Thông báo dùng chung (chuông thông báo trên header FE)
+app.include_router(notifications.router, prefix="/api")
 
 
 @app.get("/")

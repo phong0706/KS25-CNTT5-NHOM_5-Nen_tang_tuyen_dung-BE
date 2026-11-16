@@ -114,9 +114,6 @@ INSERT INTO calc_rules (tool_slug, effective_from, source, rules_json) VALUES
   "rate_before_2014": 1.5,
   "rate_from_2014": 2.0,
   "minimum_months": 12
-}'),
-('compound-interest', '2024-01-01', 'Công thức lãi kép tài chính chuẩn A = P*(1+r/n)^(nt)', '{
-  "compounding_frequencies": ["Hàng tháng", "Hàng quý", "Hàng năm"]
 }')
 ON DUPLICATE KEY UPDATE effective_from=VALUES(effective_from);
 
