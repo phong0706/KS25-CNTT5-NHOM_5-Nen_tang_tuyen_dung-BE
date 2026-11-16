@@ -30,3 +30,4 @@ from app.models.application import (  # noqa: F401
     SavedSearch,
 )
 from app.models.cv_document import CVDocument  # noqa: F401
+from app.models.notification import Notification  # noqa: F401  ← sau User vì có FK user_id → users.id
