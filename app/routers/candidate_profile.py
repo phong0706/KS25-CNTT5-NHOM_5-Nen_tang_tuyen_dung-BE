@@ -1,7 +1,7 @@
 """Router hồ sơ ứng viên (/api/candidate/profile)."""
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.schemas.candidate_profile import (
     CandidateProfilePatch,
     CompletionMissingItem,
     ProfileCompletionOut,
+    SkillsUpdateIn,
 )
 
 router = APIRouter(prefix="/candidate", tags=["Candidate Profile"])
@@ -131,6 +132,7 @@ def _build_profile_out(db: Session, user: User) -> CandidateProfileOut:
         bio=profile.bio,
         skills=skills,
         is_searchable=profile.is_searchable,
+        version=getattr(profile, "version", 1),
         experiences=experiences,
         educations=educations,
         completion=completion,
@@ -154,17 +156,78 @@ def patch_candidate_profile(
     profile = _get_or_create_profile(db, current_user.id)
     data = payload.model_dump(exclude_unset=True)
 
+    # Kiểm tra version chống xung đột chỉnh sửa đồng thời (409 Conflict)
+    req_version = data.pop("version", None)
+    current_version = getattr(profile, "version", 1)
+    if req_version is not None and req_version != current_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Hồ sơ đã được cập nhật ở một phiên khác. Vui lòng tải lại trang để xem dữ liệu mới nhất.",
+        )
+
     if "full_name" in data and data["full_name"] is not None:
-        current_user.full_name = data.pop("full_name").strip()
+        name = data.pop("full_name").strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="Họ tên không được để trống")
+        current_user.full_name = name
+
     if "phone" in data:
         current_user.phone = data.pop("phone")
 
+    # Chỉ cập nhật các trường được phép của candidate_profiles (bỏ qua trường lạ)
+    allowed_fields = {
+        "headline", "birth_date", "location", "linkedin_url",
+        "github_url", "portfolio_url", "bio", "is_searchable"
+    }
     for field, value in data.items():
-        setattr(profile, field, value)
+        if field in allowed_fields:
+            setattr(profile, field, value)
+
+    # Tăng version
+    profile.version = current_version + 1
 
     db.add(current_user)
     db.add(profile)
     db.commit()
     db.refresh(current_user)
+    db.refresh(profile)
     return _build_profile_out(db, current_user)
+
+
+@router.put("/profile/skills", response_model=CandidateProfileOut)
+def update_candidate_skills(
+    payload: SkillsUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Cập nhật toàn bộ danh sách kỹ năng của ứng viên."""
+    profile = _get_or_create_profile(db, current_user.id)
+
+    # Kiểm tra version chống xung đột chỉnh sửa đồng thời (409 Conflict)
+    current_version = getattr(profile, "version", 1)
+    if payload.version is not None and payload.version != current_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Hồ sơ đã được cập nhật ở một phiên khác. Vui lòng tải lại trang để xem dữ liệu mới nhất.",
+        )
+
+    # Chuẩn hóa kỹ năng: trim, không rỗng, không trùng không phân biệt hoa thường, tối đa 30
+    seen = set()
+    cleaned_skills = []
+    for s in payload.skills:
+        clean_s = str(s).strip()
+        if clean_s and clean_s.lower() not in seen:
+            seen.add(clean_s.lower())
+            cleaned_skills.append(clean_s)
+        if len(cleaned_skills) >= 30:
+            break
+
+    profile.skills_json = json.dumps(cleaned_skills, ensure_ascii=False)
+    profile.version = getattr(profile, "version", 1) + 1
+
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return _build_profile_out(db, current_user)
+
 
