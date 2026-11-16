@@ -61,3 +61,41 @@ class UserOut(BaseModel):
     is_verified: bool
     created_at: datetime
     updated_at: datetime
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Yêu cầu gửi mã đặt lại mật khẩu."""
+
+    email: str = Field(min_length=3, max_length=255, examples=["user@example.com"])
+
+    @model_validator(mode="after")
+    def clean_email(self) -> "ForgotPasswordRequest":
+        self.email = self.email.strip().lower()
+        if "@" not in self.email or "." not in self.email:
+            raise ValueError("Email không đúng định dạng")
+        return self
+
+
+class ForgotPasswordOut(BaseModel):
+    message: str
+    cooldown_seconds: int = 60
+
+
+class ResetPasswordRequest(BaseModel):
+    """Dữ liệu xác nhận mã và đặt lại mật khẩu mới."""
+
+    email: str = Field(min_length=3, max_length=255, examples=["user@example.com"])
+    code: str = Field(min_length=4, max_length=10, examples=["123456"])
+    new_password: str = Field(min_length=6, max_length=128, examples=["newpassword123"])
+
+    @model_validator(mode="after")
+    def clean_fields(self) -> "ResetPasswordRequest":
+        self.email = self.email.strip().lower()
+        self.code = self.code.strip()
+        if len(self.new_password) < 6:
+            raise ValueError("Mật khẩu mới phải có ít nhất 6 ký tự")
+        return self
+
+
+class ResetPasswordOut(BaseModel):
+    message: str
