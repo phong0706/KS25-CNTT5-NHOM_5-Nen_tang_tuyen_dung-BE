@@ -84,7 +84,7 @@ def test_reset_password_wrong_code_and_attempt_limit():
     user_id = user.id
     db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete()
     dummy_code = "654321"
-    token = PasswordResetToken(user_id=user_id, token_hash=hashlib.sha256(dummy_code.encode()).hexdigest(), expires_at=datetime.utcnow() + timedelta(minutes=15))
+    token = PasswordResetToken(user_id=user_id, token_hash=hashlib.sha256(dummy_code.encode()).hexdigest(), expires_at=datetime.now() + timedelta(minutes=15))
     db.add(token)
     db.commit()
     db.close()
@@ -109,7 +109,7 @@ def test_reset_password_expired_token():
     user = db.query(User).filter(User.email == TEST_EMAIL).first()
     db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
     valid_code = "777888"
-    token = PasswordResetToken(user_id=user.id, token_hash=hashlib.sha256(valid_code.encode()).hexdigest(), expires_at=datetime.utcnow() - timedelta(minutes=1))
+    token = PasswordResetToken(user_id=user.id, token_hash=hashlib.sha256(valid_code.encode()).hexdigest(), expires_at=datetime.now() - timedelta(minutes=1))
     db.add(token)
     db.commit()
     db.close()
@@ -127,7 +127,7 @@ def test_reset_password_success_and_session_revocation():
     db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
 
     valid_code = "888999"
-    token = PasswordResetToken(user_id=user.id, token_hash=hashlib.sha256(valid_code.encode()).hexdigest(), expires_at=datetime.utcnow() + timedelta(minutes=15))
+    token = PasswordResetToken(user_id=user.id, token_hash=hashlib.sha256(valid_code.encode()).hexdigest(), expires_at=datetime.now() + timedelta(minutes=15))
     db.add(token)
     db.commit()
     db.close()

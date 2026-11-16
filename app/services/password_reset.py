@@ -71,27 +71,30 @@ def request_password_reset(
     if not user:
         return {"message": generic_msg, "cooldown_seconds": settings.RESET_CODE_COOLDOWN_SECONDS}
 
-    now = datetime.utcnow()
+    now = datetime.now()
     recent = (
         db.query(PasswordResetToken)
         .filter(PasswordResetToken.user_id == user.id)
         .order_by(PasswordResetToken.created_at.desc())
         .first()
     )
-    if recent and (now - recent.created_at).total_seconds() < settings.RESET_CODE_COOLDOWN_SECONDS:
-        left = int(settings.RESET_CODE_COOLDOWN_SECONDS - (now - recent.created_at).total_seconds())
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "RATE_LIMITED",
-                "message": f"Vui lòng đợi {left} giây trước khi yêu cầu mã mới.",
-            },
-        )
+    if recent and recent.created_at:
+        diff = (now - recent.created_at).total_seconds()
+        if -10 < diff < settings.RESET_CODE_COOLDOWN_SECONDS:
+            left = max(1, int(settings.RESET_CODE_COOLDOWN_SECONDS - max(0, diff)))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": "RATE_LIMITED",
+                    "message": f"Vui lòng đợi {left} giây trước khi yêu cầu mã mới.",
+                },
+            )
 
     code = _generate_code()
     token = PasswordResetToken(
         user_id=user.id,
         token_hash=_hash_token(code),
+        created_at=now,
         expires_at=now + timedelta(minutes=settings.RESET_CODE_EXPIRE_MINUTES),
         ip_address=ip_address,
         user_agent=user_agent[:255] if user_agent else None,
@@ -136,7 +139,7 @@ def reset_password_with_code(
             },
         )
 
-    now = datetime.utcnow()
+    now = datetime.now()
     if token.expires_at < now:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
