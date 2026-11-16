@@ -1,8 +1,12 @@
 """Router hồ sơ ứng viên (/api/candidate/profile)."""
 import datetime
+import io
 import json
+import os
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from PIL import Image
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -413,6 +417,101 @@ def delete_candidate_education(
     db.commit()
 
     return _build_profile_out(db, current_user)
+
+
+AVATAR_UPLOAD_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "avatars"
+)
+
+
+def _validate_image_magic_bytes(header: bytes) -> str:
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return "webp"
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Định dạng file không hợp lệ. Chỉ chấp nhận file ảnh PNG, JPEG, WebP hợp lệ.",
+    )
+
+
+@router.post("/profile/avatar", response_model=CandidateProfileOut)
+async def upload_candidate_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Tải lên ảnh đại diện: kiểm tra magic bytes, bóc EXIF bằng Pillow, xuất WebP 0.85."""
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dung lượng ảnh vượt quá giới hạn 5MB.",
+        )
+
+    # Kiểm tra magic byte
+    _validate_image_magic_bytes(content[:16])
+
+    # Kiểm tra file ảnh hợp lệ qua Pillow
+    try:
+        img = Image.open(io.BytesIO(content))
+        img.verify()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File ảnh bị hỏng hoặc không đúng định dạng.",
+        )
+
+    # Mở lại để xử lý và bóc EXIF
+    img = Image.open(io.BytesIO(content))
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        converted = img.convert("RGBA")
+    else:
+        converted = img.convert("RGB")
+
+    # Resize về 512x512
+    converted.thumbnail((512, 512), Image.Resampling.LANCZOS)
+
+    os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.webp"
+    file_path = os.path.join(AVATAR_UPLOAD_DIR, filename)
+
+    # Lưu WebP chất lượng 85, không EXIF
+    converted.save(file_path, "WEBP", quality=85)
+
+    current_user.avatar_url = f"http://127.0.0.1:8000/uploads/avatars/{filename}"
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+
+    db.add(current_user)
+    db.add(profile)
+    db.commit()
+    db.refresh(current_user)
+    db.refresh(profile)
+
+    return _build_profile_out(db, current_user)
+
+
+@router.delete("/profile/avatar", response_model=CandidateProfileOut)
+def delete_candidate_avatar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("candidate")),
+):
+    """Xóa ảnh đại diện hiện tại của ứng viên."""
+    current_user.avatar_url = None
+    profile = _get_or_create_profile(db, current_user.id)
+    profile.version = getattr(profile, "version", 1) + 1
+
+    db.add(current_user)
+    db.add(profile)
+    db.commit()
+    db.refresh(current_user)
+    db.refresh(profile)
+
+    return _build_profile_out(db, current_user)
+
 
 
 

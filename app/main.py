@@ -3,11 +3,13 @@
 Chạy:  uvicorn app.main:app --reload
 Tài liệu API tự sinh: http://127.0.0.1:8000/docs
 """
+import os
 import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 
 from app import models  # noqa: F401 - import để SQLAlchemy biết các bảng
@@ -94,6 +96,11 @@ app.include_router(matching.router)
 app.include_router(salary_insights.router, prefix="/api")
 # Thông báo dùng chung (chuông thông báo trên header FE)
 app.include_router(notifications.router, prefix="/api")
+
+# Static files: uploads (avatars, documents, etc.)
+UPLOADS_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(os.path.join(UPLOADS_ROOT, "avatars"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_ROOT), name="uploads")
 
 
 @app.get("/")
