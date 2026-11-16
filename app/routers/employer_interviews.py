@@ -3,7 +3,7 @@ Tuân thủ: < 200 dòng, kiểm tra quyền backend (401/403/404), trả về g
 """
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
@@ -14,45 +14,13 @@ from app.models.user import User
 from app.schemas.employer_application import (
     EmployerInterviewScheduleIn, InterviewCancelIn, InterviewItemOut
 )
+from app.services.interview_service import check_interview_overlap
 from app.services.notification import (
-    notify_interview,
     notify_interview_changed,
     notify_interview_cancelled,
 )
 
 router = APIRouter(prefix="/employer/interviews", tags=["Employer Interviews"])
-
-
-def _check_overlap(db: Session, employer_id: int, start: datetime, duration_min: int, exclude_id: int | None = None):
-    end = start + timedelta(minutes=duration_min)
-    # Find existing scheduled interviews for this employer
-    stmt = (
-        select(Interview, User.full_name.label("cand_name"), Job.title.label("job_title"))
-        .join(Application, Interview.application_id == Application.id)
-        .join(Job, Application.job_id == Job.id)
-        .join(User, Application.candidate_id == User.id)
-        .where(
-            Job.employer_id == employer_id,
-            Interview.status == "scheduled",
-        )
-    )
-    if exclude_id:
-        stmt = stmt.where(Interview.id != exclude_id)
-
-    candidates = db.execute(stmt).all()
-    for iv, c_name, j_title in candidates:
-        iv_start = iv.scheduled_at
-        iv_end = iv_start + timedelta(minutes=iv.duration_min or 45)
-        # Check overlap: (start < iv_end) and (end > iv_start)
-        if start < iv_end and end > iv_start:
-            return {
-                "id": iv.id,
-                "scheduled_at": iv_start,
-                "duration_min": iv.duration_min,
-                "candidate_name": c_name,
-                "job_title": j_title,
-            }
-    return None
 
 
 @router.get("", response_model=list[InterviewItemOut], summary="Danh sách lịch phỏng vấn theo tuần/khoảng thời gian")
@@ -76,11 +44,9 @@ def list_interviews(
     if status and status != "all":
         stmt = stmt.where(Interview.status == status)
     if from_date:
-        start_dt = datetime.combine(from_date, datetime.min.time())
-        stmt = stmt.where(Interview.scheduled_at >= start_dt)
+        stmt = stmt.where(Interview.scheduled_at >= datetime.combine(from_date, datetime.min.time()))
     if to_date:
-        end_dt = datetime.combine(to_date, datetime.max.time())
-        stmt = stmt.where(Interview.scheduled_at <= end_dt)
+        stmt = stmt.where(Interview.scheduled_at <= datetime.combine(to_date, datetime.max.time()))
 
     rows = db.execute(stmt.order_by(Interview.scheduled_at.asc())).all()
     return [
@@ -121,15 +87,19 @@ def reschedule_interview(
     if not iv:
         raise HTTPException(status_code=404, detail="Lịch phỏng vấn không tồn tại hoặc không thuộc quyền quản lý.")
 
+    now_dt = datetime.now() if body.scheduled_at.tzinfo is None else datetime.now(timezone.utc)
+    if body.scheduled_at < now_dt - timedelta(minutes=5):
+        raise HTTPException(
+            status_code=400,
+            detail="Thời gian phỏng vấn không thể ở trong quá khứ. Vui lòng chọn ngày và giờ trong tương lai.",
+        )
+
     if not body.force:
-        overlap = _check_overlap(db, current_user.id, body.scheduled_at, body.duration_min, exclude_id=iv.id)
+        overlap = check_interview_overlap(db, current_user.id, body.scheduled_at, body.duration_min, exclude_id=iv.id)
         if overlap:
             raise HTTPException(
                 status_code=409,
-                detail={
-                    "message": "Trùng lịch phỏng vấn",
-                    "conflict": overlap,
-                },
+                detail={"message": "Trùng lịch phỏng vấn", "conflict": overlap},
             )
 
     iv.scheduled_at = body.scheduled_at
@@ -144,7 +114,7 @@ def reschedule_interview(
         iv.note = body.note
     iv.status = "scheduled"
 
-    # Also update application snapshot
+    # Cập nhật snapshot trên application & gửi notification
     app = db.scalar(select(Application).where(Application.id == iv.application_id))
     if app:
         app.interview_at = body.scheduled_at
