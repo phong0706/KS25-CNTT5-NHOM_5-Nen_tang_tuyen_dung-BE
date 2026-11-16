@@ -57,6 +57,11 @@ class Company(Base):
     # Mã số thuế
     tax_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Ảnh giấy phép kinh doanh dùng cho bước xác minh
+    verification_document: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    verification_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Quy mô công ty, vd: "1-50", "51-200", "1000+" (giữ cả company_size & size)
     company_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)

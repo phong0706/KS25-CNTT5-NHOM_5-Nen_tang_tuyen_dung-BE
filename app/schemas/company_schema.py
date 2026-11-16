@@ -3,6 +3,7 @@
 FastAPI dùng schema để tự kiểm tra dữ liệu: sai kiểu / thiếu trường -> trả lỗi 422.
 """
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -58,12 +59,25 @@ class CompanyProfileUpdate(BaseModel):
     description: str | None = Field(default=None, examples=["Công ty hàng đầu về CNTT"])
 
 
+class CompanyVerificationSubmit(BaseModel):
+    tax_code: str = Field(min_length=1, max_length=50, examples=["0301363748"])
+
+
+class CompanyVerificationDecision(BaseModel):
+    status: Literal["VERIFIED", "REJECTED"]
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class CompanyResponse(CompanyBase):
     """Dữ liệu API trả về cho FE (có kèm theo ID và thời gian)."""
 
     id: int
     employer_id: int
+    owner_id: int | None = None
     is_draft: bool
+    verification_document: str | None = None
+    verification_rejection_reason: str | None = None
+    verification_submitted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
