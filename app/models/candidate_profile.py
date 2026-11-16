@@ -5,32 +5,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, fun
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
-
-
-class CandidateProfile(Base):
-    __tablename__ = "candidate_profiles"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
-    )
-    headline: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    birth_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    location: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    linkedin_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    github_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    portfolio_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
-    skills_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    level: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    work_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    expected_salary: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    is_searchable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+from app.models.candidate import CandidateProfile  # noqa: F401
 
 
 class CandidateExperience(Base):

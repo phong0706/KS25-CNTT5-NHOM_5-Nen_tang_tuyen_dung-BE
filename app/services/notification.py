@@ -92,11 +92,11 @@ def build_notification_content(
         app_id = data.get("application_id")
         job_id = data.get("job_id")
         if app_id and job_id:
-            href = f"/pages/employer/recruitment.html?tab=candidates&job={job_id}&app={app_id}"
+            href = f"/pages/employer/applications.html?job_id={job_id}&app_id={app_id}"
         elif app_id:
-            href = f"/pages/employer/recruitment.html?tab=candidates&app={app_id}"
+            href = f"/pages/employer/applications.html?app_id={app_id}"
         else:
-            href = fallback_href or "/pages/employer/recruitment.html?tab=candidates"
+            href = fallback_href or "/pages/employer/applications.html"
         return title, body, href
 
     if notif_type == NotificationType.APPLICATION_STATUS_CHANGED:
@@ -291,9 +291,9 @@ def notify_application_submitted(
 ) -> Notification | None:
     """Thông báo cho nhà tuyển dụng: có hồ sơ ứng tuyển mới."""
     href = (
-        f"/pages/employer/recruitment.html?tab=candidates&job={job_id}&app={application_id}"
+        f"/pages/employer/applications.html?job_id={job_id}&app_id={application_id}"
         if job_id
-        else f"/pages/employer/recruitment.html?tab=candidates&app={application_id}"
+        else f"/pages/employer/applications.html?app_id={application_id}"
     )
     payload = {
         "candidate_name": candidate_name,

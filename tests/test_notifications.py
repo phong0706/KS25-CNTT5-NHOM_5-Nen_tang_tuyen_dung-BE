@@ -69,7 +69,7 @@ def test_notification_no_name_repetition():
     assert body == "Nguyễn Văn An ứng tuyển Senior SRE"
     # Tên chỉ xuất hiện đúng 1 lần
     assert body.count("Nguyễn Văn An") == 1
-    assert "tab=candidates" in href and "job=2" in href and "app=10" in href
+    assert "applications.html" in href and "job_id=2" in href and "app_id=10" in href
 
 
 def test_notification_missing_payload_graceful():
@@ -80,7 +80,7 @@ def test_notification_missing_payload_graceful():
     )
     assert title == "Hồ sơ mới"
     assert "Ứng viên" in body and "ứng tuyển" in body
-    assert "/pages/employer/recruitment.html" in href
+    assert "/pages/employer/applications.html" in href
 
     # Payload là chuỗi JSON không hợp lệ
     title2, body2, _ = build_notification_content(

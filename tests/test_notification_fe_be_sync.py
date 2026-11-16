@@ -34,11 +34,19 @@ def _login(email: str, password: str) -> str:
 
 def test_notification_links_point_to_real_fe_routes():
     """Link thong bao phai tro toi route FE that + co query param id de deep-link."""
+    from app.models.notification import Notification
+
     db = SessionLocal()
     try:
         users = db.scalars(select(User).limit(2)).all()
         assert len(users) >= 2, "Cần ít nhất 2 user trong DB"
         emp_id, cand_id = users[0].id, users[1].id
+
+        db.query(Notification).filter(
+            (Notification.dedupe_key.like("application:42:%"))
+            | (Notification.dedupe_key.like("job:7:%"))
+        ).delete(synchronize_session=False)
+        db.commit()
 
         n1 = notify_application_submitted(
             db, employer_id=emp_id, candidate_name="A", job_title="J",

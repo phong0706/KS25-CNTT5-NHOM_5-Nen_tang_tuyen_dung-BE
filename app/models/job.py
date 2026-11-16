@@ -147,13 +147,18 @@ class SavedJob(Base):
     __tablename__ = "saved_jobs"
     __table_args__ = (
         Index("idx_saved_user_id", "user_id"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    candidate_profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=True
     )
     job_id: Mapped[int] = mapped_column(
         ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    saved_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now(), nullable=True)
