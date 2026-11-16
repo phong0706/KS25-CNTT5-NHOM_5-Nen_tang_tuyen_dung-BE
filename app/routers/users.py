@@ -3,6 +3,11 @@
 Hỗ trợ:
 - Danh sách tài khoản: lọc theo vai trò / trạng thái, tìm kiếm, phân trang
     GET /api/users?role=&is_active=&keyword=&page=&page_size=
+    (Tương thích ngược với tham số q, skip, limit)
+- Thống kê tổng quan người dùng:
+    GET /api/users/stats
+- Khoá/Mở khoá nhanh:
+    PATCH /api/users/{user_id}/toggle-status
 - Khoá tài khoản kèm lý do (sau khi khoá: không đăng nhập được, token cũ cũng bị chặn):
     POST /api/users/{user_id}/lock      {"locked_reason": "..."}
 - Mở khoá tài khoản:
@@ -11,6 +16,7 @@ Hỗ trợ:
 Mọi endpoint đều yêu cầu Bearer token của tài khoản role=admin.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
@@ -42,18 +48,20 @@ def list_users(
         default=None,
         description="Tìm kiếm theo email / họ tên / số điện thoại",
     ),
+    q: str | None = Query(
+        default=None,
+        description="Tìm kiếm theo tên hoặc email (tương thích ngược)",
+    ),
     page: int = Query(default=1, ge=1, description="Số trang hiện tại (bắt đầu từ 1)"),
     page_size: int = Query(
         default=20, ge=1, le=100, description="Số tài khoản mỗi trang (tối đa 100)"
     ),
+    skip: int | None = Query(default=None, ge=0, description="Offset (tương thích ngược)"),
+    limit: int | None = Query(default=None, ge=1, le=100, description="Limit (tương thích ngược)"),
     current_user: User = Depends(role_required("admin")),
     db: Session = Depends(get_db),
 ):
-    """Trả về danh sách tài khoản thoả mãn bộ lọc kèm phân trang.
-
-    - `role` sai giá trị → **400**
-    - `page` < 1 hoặc `page_size` > 100 → **422**
-    """
+    """Trả về danh sách tài khoản thoả mãn bộ lọc kèm phân trang."""
     if role is not None and role not in VALID_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -63,23 +71,76 @@ def list_users(
             ),
         )
 
+    effective_keyword = keyword if keyword is not None else q
+    effective_page_size = limit if limit is not None else page_size
+    effective_page = (skip // effective_page_size) + 1 if skip is not None else page
+
     users, total = user_crud.get_users(
         db,
         role=role,
         is_active=is_active,
-        keyword=keyword,
-        page=page,
-        page_size=page_size,
+        keyword=effective_keyword,
+        page=effective_page,
+        page_size=effective_page_size,
     )
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    total_pages = (total + effective_page_size - 1) // effective_page_size if total > 0 else 0
 
     return UserListOut(
         items=users,
         total=total,
-        page=page,
-        page_size=page_size,
+        page=effective_page,
+        page_size=effective_page_size,
         total_pages=total_pages,
     )
+
+
+@router.get("/stats", summary="Thống kê tổng quan người dùng (chỉ Admin)")
+def get_user_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("admin")),
+):
+    total_users = db.scalar(select(func.count(User.id))) or 0
+    total_candidates = db.scalar(select(func.count(User.id)).where(User.role == "candidate")) or 0
+    total_employers = db.scalar(select(func.count(User.id)).where(User.role == "employer")) or 0
+    total_admins = db.scalar(select(func.count(User.id)).where(User.role == "admin")) or 0
+    active_users = db.scalar(select(func.count(User.id)).where(User.is_active == True)) or 0
+
+    return {
+        "total_users": total_users,
+        "total_candidates": total_candidates,
+        "total_employers": total_employers,
+        "total_admins": total_admins,
+        "active_users": active_users,
+    }
+
+
+@router.patch(
+    "/{user_id}/toggle-status",
+    response_model=UserOut,
+    summary="Khoá/Mở khoá nhanh tài khoản (chỉ Admin)",
+)
+def toggle_user_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("admin")),
+):
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không thể tự khoá tài khoản của chính mình",
+        )
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy người dùng")
+
+    user.is_active = not user.is_active
+    if user.is_active and hasattr(user, "locked_reason"):
+        user.locked_reason = None
+
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.post(

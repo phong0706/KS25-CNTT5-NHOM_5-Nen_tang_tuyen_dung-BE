@@ -1,6 +1,6 @@
 # Backend base: Python FastAPI + MySQL
 
-Khung backend chung cho các nhóm thực tập lớp **HN-KS25-CNTT1**. Đã có sẵn:
+Khung backend chung cho các nhóm thực tập (Mã lớp: HN-KS25-CNTT5). Đã có sẵn:
 
 - Kết nối **MySQL** bằng SQLAlchemy + PyMySQL, cấu hình đọc từ file `.env`
 - **CRUD mẫu** cho bảng `items` (thêm / xem / sửa / xoá / tìm kiếm)

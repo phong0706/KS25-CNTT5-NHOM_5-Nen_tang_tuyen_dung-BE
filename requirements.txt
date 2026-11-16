@@ -6,8 +6,9 @@ PyMySQL==1.1.1
 cryptography==43.0.3
 pydantic-settings==2.6.1
 
-# File upload support
-python-multipart==0.0.18
+# File upload & image processing support
+python-multipart==0.0.33
+pillow>=10.0.0
 # MIME type detection (python-magic-bin for Windows compatibility)
 python-magic-bin==0.4.14
 

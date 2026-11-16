@@ -8,7 +8,16 @@ REJECTED -> bị từ chối (thông tin không hợp lệ)
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum as SQLEnum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -33,20 +42,24 @@ class Company(Base):
     # ID người sở hữu (hỗ trợ truy vấn nhanh theo owner)
     owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
-    # Tên công ty
+    # Tên công ty & slug URL
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
 
-    # URL logo (jpg/png, do server lưu hoặc URL ngoài)
+    # URL logo (giữ cả logo & logo_url để tương thích cả 2 nhánh)
     logo: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # URL ảnh bìa
+    # URL ảnh bìa (giữ cả cover_image & cover_url để tương thích cả 2 nhánh)
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Mã số thuế
     tax_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    # Quy mô công ty, vd: "1-50", "51-200", "1000+"
+    # Quy mô công ty, vd: "1-50", "51-200", "1000+" (giữ cả company_size & size)
     company_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Liên kết ngành nghề (FK mềm – không ràng buộc CASCADE để không block khi xóa industry)
     industry_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
