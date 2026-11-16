@@ -51,6 +51,7 @@ class Application(Base):
     interview_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     interview_mode: Mapped[str | None] = mapped_column(String(80), nullable=True)
     interview_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -134,4 +135,58 @@ class SavedSearch(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     filters_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ApplicationNote(Base):
+    __tablename__ = "application_notes"
+    __table_args__ = (Index("idx_app_notes_app_id", "application_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.id", ondelete="CASCADE"), nullable=False
+    )
+    author_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Interview(Base):
+    __tablename__ = "interviews"
+    __table_args__ = (
+        Index("idx_interviews_app_id", "application_id"),
+        Index("idx_interviews_scheduled_at", "scheduled_at"),
+        Index("idx_interviews_created_by", "created_by"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.id", ondelete="CASCADE"), nullable=False
+    )
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    duration_min: Mapped[int] = mapped_column(Integer, default=45)
+    mode: Mapped[str] = mapped_column(String(80), default="Trực tuyến qua Google Meet")
+    location_or_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    interviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="scheduled")
+    cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MetaRejectionReason(Base):
+    __tablename__ = "meta_rejection_reasons"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
 

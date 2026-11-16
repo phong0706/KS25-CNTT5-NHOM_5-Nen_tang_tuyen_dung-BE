@@ -118,3 +118,13 @@ def list_cv_templates(db: Session = Depends(get_db)):
         for r in rows
     ]
 
+
+@router.get("/rejection-reasons", summary="Danh sách lý do từ chối hồ sơ")
+def list_rejection_reasons(db: Session = Depends(get_db)):
+    """Trả về danh sách lý do từ chối hồ sơ ứng viên."""
+    from sqlalchemy import text
+    stmt = text("SELECT id, slug, name, sort_order FROM meta_rejection_reasons ORDER BY sort_order ASC, id ASC")
+    rows = db.execute(stmt).fetchall()
+    return [{"id": r[0], "slug": r[1], "name": r[2], "sort_order": r[3]} for r in rows]
+
+

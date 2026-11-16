@@ -30,6 +30,8 @@ class EmployerApplicationItemOut(BaseModel):
     status: str
     status_label: str
     status_tone: str
+    is_viewed: bool = False
+    match_score: int = 70
     created_at: datetime
     updated_at: datetime
     interview: InterviewInfo | None = None
@@ -54,22 +56,65 @@ class EmployerApplicationDetailOut(BaseModel):
     status: str
     status_label: str
     status_tone: str
+    is_viewed: bool = False
+    match_score: int = 70
     created_at: datetime
     updated_at: datetime
     interview: InterviewInfo | None = None
     history: list[StatusHistoryItem] = Field(default_factory=list)
+    allowed_transitions: list[str] = Field(default_factory=list)
+
+
+class ApplicationNoteOut(BaseModel):
+    id: int
+    application_id: int
+    author_id: int
+    author_name: str
+    content: str
+    created_at: datetime
+
+
+class ApplicationNoteCreateIn(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class EmployerInterviewScheduleIn(BaseModel):
+    scheduled_at: datetime
+    duration_min: int = Field(default=45, ge=15, le=180)
+    mode: str = "Trực tuyến qua Google Meet"
+    location_or_link: str | None = None
+    interviewer: str | None = None
+    note: str | None = None
+    force: bool = False
+
+
+class InterviewCancelIn(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class InterviewItemOut(BaseModel):
+    id: int
+    application_id: int
+    candidate_name: str
+    candidate_avatar: str | None = None
+    candidate_email: str | None = None
+    job_id: int
+    job_title: str
+    scheduled_at: datetime
+    duration_min: int
+    mode: str
+    location_or_link: str | None = None
+    interviewer: str | None = None
+    note: str | None = None
+    status: str
+    cancel_reason: str | None = None
 
 
 class EmployerStatusUpdateIn(BaseModel):
     status: str
     note: str | None = None
+    rejection_reason_slug: str | None = None
 
-
-class EmployerInterviewScheduleIn(BaseModel):
-    interview_at: datetime
-    interview_mode: str = "Trực tuyến qua Google Meet"
-    interview_location: str | None = None
-    note: str | None = None
 
 
 # ── ADMIN SCHEMAS ─────────────────────────────────────────────
@@ -116,6 +161,8 @@ class AdminApplicationDetailOut(BaseModel):
     status: str
     status_label: str
     status_tone: str
+    is_viewed: bool = False
+    match_score: int = 70
     created_at: datetime
     updated_at: datetime
     interview: InterviewInfo | None = None

@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.db.session import Base, engine
 from app.routers import (
     admin_applications, admin_interview, auth, candidate_applications, candidate_apply, candidate_cv_documents, candidate_detail,
-    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_applications, employer_jobs, health, items, meta, public_jobs, users,
+    candidate_profile, candidate_recommended, candidate_saved_jobs, companies, employer_applications, employer_interviews, employer_jobs, health, items, meta, public_jobs, users,
     nav_meta, tools, interview, candidate_cover_letters, matching, search_insights,
     salary_insights, notifications,
 )
@@ -74,6 +74,7 @@ app.include_router(candidate_profile.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
+app.include_router(employer_interviews.router, prefix="/api")
 # search_insights PHẢI được đăng ký TRƯỚC public_jobs:
 # public_jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
 # khớp "relaxed" vào job_id và trả 422 thay vì gọi tới /api/jobs/relaxed.
