@@ -97,3 +97,24 @@ def search_skills(
         MetaSkillOut(id=s.id, name=s.name, usage_count=s.usage_count, job_count=s.usage_count)
         for s in rows
     ]
+
+
+@router.get("/cv-templates", summary="Danh sách mẫu CV và chuẩn ATS")
+def list_cv_templates(db: Session = Depends(get_db)):
+    """Trả về danh sách 4 mẫu CV và trạng thái ats_friendly từ database."""
+    from sqlalchemy import text
+    stmt = text("SELECT id, slug, name, category, tagline, ats_friendly, sort_order FROM cv_templates ORDER BY sort_order ASC")
+    rows = db.execute(stmt).fetchall()
+    return [
+        {
+            "id": r[0],
+            "slug": r[1],
+            "name": r[2],
+            "category": r[3],
+            "tagline": r[4],
+            "ats_friendly": bool(r[5]),
+            "sort_order": r[6],
+        }
+        for r in rows
+    ]
+
