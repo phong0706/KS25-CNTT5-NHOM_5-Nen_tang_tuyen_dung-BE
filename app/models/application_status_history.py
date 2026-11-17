@@ -14,6 +14,7 @@ class ApplicationStatusHistory(Base):
     hệ thống sẽ tạo 1 bản ghi mới trong bảng này.
     """
     __tablename__ = "application_status_history"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     

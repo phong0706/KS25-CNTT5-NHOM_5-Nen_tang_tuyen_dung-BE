@@ -19,6 +19,7 @@ class SavedJob(Base):
         Index("idx_saved_jobs_candidate", "candidate_profile_id"),
         Index("idx_saved_jobs_job", "job_id"),
         Index("idx_saved_jobs_saved_at", "saved_at"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

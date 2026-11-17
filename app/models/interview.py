@@ -13,6 +13,7 @@ class Interview(Base):
     Một đơn ứng tuyển có thể có nhiều lịch phỏng vấn (vòng 1, vòng 2, ...).
     """
     __tablename__ = "interviews"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     

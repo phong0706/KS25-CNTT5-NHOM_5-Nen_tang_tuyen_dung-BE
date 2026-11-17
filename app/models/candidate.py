@@ -22,6 +22,9 @@ class CandidateProfile(Base):
     """Hồ sơ ứng viên — quan hệ 1-1 với bảng users (liên kết qua user_id)."""
 
     __tablename__ = "candidate_profiles"
+    # Trùng ten bang voi app.models.candidate_profile.CandidateProfile (nhanh cu):
+    # extend_existing=True de SQLAlchemy gop cot thay vi nem InvalidRequestError.
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
@@ -78,7 +81,7 @@ class CandidateSkill(Base):
         String(50), nullable=True
     )  # Ví dụ: Beginner / Intermediate / Advanced
 
-    profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="skills")
+    profile: Mapped["CandidateProfile"] = relationship("app.models.candidate.CandidateProfile", back_populates="skills")
 
 
 class Experience(Base):
@@ -99,7 +102,7 @@ class Experience(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     profile: Mapped["CandidateProfile"] = relationship(
-        "CandidateProfile", back_populates="experiences"
+        "app.models.candidate.CandidateProfile", back_populates="experiences"
     )
 
 
@@ -122,7 +125,7 @@ class Education(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     profile: Mapped["CandidateProfile"] = relationship(
-        "CandidateProfile", back_populates="educations"
+        "app.models.candidate.CandidateProfile", back_populates="educations"
     )
 
 
@@ -145,4 +148,4 @@ class Cv(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="cvs")
+    profile: Mapped["CandidateProfile"] = relationship("app.models.candidate.CandidateProfile", back_populates="cvs")
