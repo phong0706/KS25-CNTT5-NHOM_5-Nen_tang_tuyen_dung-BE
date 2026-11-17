@@ -1,17 +1,22 @@
-"""API xác thực.
-
-    POST /api/auth/register  đăng ký (candidate hoặc employer)
-    POST /api/auth/login     đăng nhập, nhận JWT
-    GET  /api/auth/me        thông tin user đang đăng nhập (cần Bearer token)
-"""
-from fastapi import APIRouter, Depends, HTTPException, status
+"""API xác thực: đăng ký, đăng nhập, quên và đặt lại mật khẩu."""
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, get_current_user, hash_password, verify_password
 from app.crud import company as company_crud
 from app.crud import user as user_crud
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenOut, UserOut
+from app.schemas.auth import (
+    ForgotPasswordOut,
+    ForgotPasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordOut,
+    ResetPasswordRequest,
+    TokenOut,
+    UserOut,
+)
+from app.services.password_reset import request_password_reset, reset_password_with_code
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -78,8 +83,37 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             detail="Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.",
         )
 
-    token = create_access_token(user.id, user.role)
+    token = create_access_token(user.id, user.role, getattr(user, "token_version", 1))
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordOut,
+    summary="Yêu cầu mã đặt lại mật khẩu",
+)
+def forgot_password(
+    data: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Gửi mã xác nhận 6 số đặt lại mật khẩu qua email."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return request_password_reset(db, data.email, ip_address=ip, user_agent=ua)
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordOut,
+    summary="Đặt lại mật khẩu với mã xác nhận",
+)
+def reset_password(
+    data: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Xác thực mã 6 số và cập nhật mật khẩu mới, hủy toàn bộ phiên cũ."""
+    return reset_password_with_code(db, data.email, data.code, data.new_password)
 
 
 @router.get(

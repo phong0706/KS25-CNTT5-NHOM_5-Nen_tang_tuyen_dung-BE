@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     # Dung lượng tối đa mỗi file (bytes). Mặc định 2 MB.
     MAX_UPLOAD_BYTES: int = 2 * 1024 * 1024  # 2 MB
 
+    # Môi trường chạy & Forgot password
+    ENVIRONMENT: str = "development"
+    LOG_RESET_CODE_IN_DEV: bool = True
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "no-reply@techrecruit.vn"
+    RESET_CODE_EXPIRE_MINUTES: int = 15
+    RESET_CODE_COOLDOWN_SECONDS: int = 60
+    RESET_CODE_MAX_ATTEMPTS: int = 5
+
     @property
     def database_url(self) -> str:
         # mysql+pymysql://user:password@host:port/database

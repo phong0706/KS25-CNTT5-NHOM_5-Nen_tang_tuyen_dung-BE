@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users(
     is_active BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
     locked_reason VARCHAR(500),
+    token_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -41,6 +42,27 @@ CREATE TABLE IF NOT EXISTS companies (
     CONSTRAINT fk_company_employer
         FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_employer_id (employer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------ --
+-- Bảng password_reset_tokens
+-- ------------------------------------------------------------------ --
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT FALSE,
+    used_at DATETIME NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    ip_address VARCHAR(45) NULL,
+    user_agent VARCHAR(255) NULL,
+    CONSTRAINT fk_prt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_prt_user_id (user_id),
+    INDEX idx_prt_token_hash (token_hash),
+    INDEX idx_prt_expires_at (expires_at),
+    INDEX idx_prt_is_used (is_used)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------------ --
