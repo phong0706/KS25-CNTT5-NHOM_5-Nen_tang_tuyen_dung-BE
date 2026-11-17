@@ -46,6 +46,26 @@ class CV(Base):
     is_default: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    @property
+    def file_size(self) -> int:
+        return self.size_bytes or 0
+
+    @file_size.setter
+    def file_size(self, val: int) -> None:
+        self.size_bytes = val
+
+    @property
+    def uploaded_at(self) -> datetime:
+        return self.created_at
+
+    @property
+    def profile_id(self) -> int | None:
+        return self.candidate_id
+
+    @profile_id.setter
+    def profile_id(self, val: int | None) -> None:
+        self.candidate_id = val
+
 
 class Application(Base):
     """Đơn ứng tuyển - liên kết ứng viên với tin tuyển dụng."""

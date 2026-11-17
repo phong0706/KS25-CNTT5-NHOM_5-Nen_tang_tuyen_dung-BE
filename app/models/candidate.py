@@ -72,9 +72,6 @@ class CandidateProfile(Base):
     educations: Mapped[list["Education"]] = relationship(
         "Education", back_populates="profile", cascade="all, delete-orphan"
     )
-    cvs: Mapped[list["Cv"]] = relationship(
-        "Cv", back_populates="profile", cascade="all, delete-orphan"
-    )
 
 
 class CandidateSkill(Base):
@@ -143,23 +140,5 @@ class Education(Base):
     )
 
 
-class Cv(Base):
-    """CV (file PDF/DOCX) do ứng viên tải lên."""
+from app.models.application import CV as Cv  # noqa: E402, F401
 
-    __tablename__ = "cvs"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("candidate_profiles.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    original_name: Mapped[str] = mapped_column(String(255), nullable=False)   # Tên file gốc
-    stored_name: Mapped[str] = mapped_column(
-        String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4())
-    )  # Tên lưu dưới dạng UUID (không lộ tên thật)
-    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)         # Bytes
-    mime_type: Mapped[str] = mapped_column(String(127), nullable=False)        # vd: application/pdf
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-    profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="cvs")

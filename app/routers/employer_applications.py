@@ -2,16 +2,18 @@
 Quy tắc: Kiểm tra quyền backend (401/403/404), < 200 dòng.
 """
 import json
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
 from app.db.session import get_db
 from app.models.application import (
-    Application, ApplicationNote, ApplicationStatusHistory, Interview,
+    Application, ApplicationNote, ApplicationStatusHistory, CV, Interview,
     MetaApplicationStatus, MetaRejectionReason,
 )
 from app.models.candidate_profile import CandidateProfile
@@ -198,6 +200,64 @@ def get_employer_application_detail(
         created_at=app_row.created_at, updated_at=app_row.updated_at, interview=_iv_info(app_row), history=history,
         allowed_transitions=ALLOWED_TRANSITIONS.get(app_row.status, []),
     )
+
+
+UPLOAD_CV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "cvs")
+
+
+@router.get("/{app_id}/cv", summary="Xem / tải file CV của đơn ứng tuyển")
+def get_application_cv_file(
+    app_id: int,
+    current_user=Depends(role_required("recruiter", "employer")),
+    db: Session = Depends(get_db),
+):
+    row = db.execute(
+        select(Application, Job.employer_id)
+        .join(Job, Application.job_id == Job.id)
+        .where(Application.id == app_id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
+
+    app_row, job_owner_id = row[0], row[1]
+    if job_owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền xem CV của đơn ứng tuyển thuộc tin tuyển dụng khác.",
+        )
+
+    if not app_row.cv_id:
+        raise HTTPException(status_code=404, detail="Đơn ứng tuyển này không có file CV đính kèm.")
+
+    cv = db.scalar(select(CV).where(CV.id == app_row.cv_id))
+    if not cv or not cv.stored_name:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thông tin file CV trong hệ thống.")
+
+    filepath = os.path.join(UPLOAD_CV_DIR, cv.stored_name)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="File CV không tồn tại trên hệ thống lưu trữ.")
+
+    filename = app_row.cv_name_snapshot or cv.original_name or "CV.pdf"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == ".pdf":
+        media_type = "application/pdf"
+    elif ext == ".docx":
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif ext == ".doc":
+        media_type = "application/msword"
+    else:
+        media_type = cv.mime_type or "application/pdf"
+
+    return FileResponse(
+        filepath,
+        media_type=media_type,
+        filename=filename,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Type",
+        },
+    )
+
 
 @router.post("/{app_id}/view", summary="Đánh dấu đã xem hồ sơ")
 def mark_application_viewed(
