@@ -83,3 +83,36 @@ def compute_salary_insights(salaries: List[float]) -> Dict[str, Any]:
         "is_sufficient": total_samples >= 5,
     }
 
+
+def compute_skills_benchmarks(
+    pairs: List[tuple[str, float]],
+    min_samples: int = 5,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    """Gom nhóm mức lương theo kỹ năng, lọc min_samples, tính median và sắp xếp giảm dần.
+    Mỗi kết quả gồm: skill, median_salary, sample_count, display_salary.
+    """
+    from collections import defaultdict
+    groups: Dict[str, List[float]] = defaultdict(list)
+    for sk, sal in pairs:
+        if sk and sal and sal > 0:
+            groups[sk.strip()].append(float(sal))
+
+    results: List[Dict[str, Any]] = []
+    for sk, sals in groups.items():
+        if len(sals) >= min_samples:
+            sals.sort()
+            n = len(sals)
+            med = round(sals[n // 2] if n % 2 == 1 else (sals[n // 2 - 1] + sals[n // 2]) / 2.0)
+            val_in_tr = med / 1_000_000.0
+            results.append({
+                "skill": sk,
+                "median_salary": med,
+                "sample_count": n,
+                "display_salary": f"{val_in_tr:.1f}".replace(".", ",") + " tr/tháng",
+            })
+
+    results.sort(key=lambda x: (x["median_salary"], x["sample_count"]), reverse=True)
+    return results[:limit]
+
+
