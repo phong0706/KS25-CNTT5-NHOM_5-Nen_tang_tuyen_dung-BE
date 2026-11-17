@@ -159,7 +159,7 @@ def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_
     stmt = (
         select(model_cls.slug, model_cls.name, func.coalesce(subq.c.cnt, 0).label("cnt"))
         .outerjoin(subq, model_cls.id == subq.c.meta_id)
-        .order_by(model_cls.sort_order.asc(), model_cls.id.asc())
+        .order_by(text("cnt DESC"), model_cls.sort_order.asc(), model_cls.id.asc())
     )
     return [FacetItemOut(value=r.slug, label=r.name, count=int(r.cnt)) for r in db.execute(stmt).all()]
 
