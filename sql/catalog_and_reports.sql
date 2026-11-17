@@ -42,18 +42,24 @@ CREATE TABLE IF NOT EXISTS skills (
 -- ============================================
 CREATE TABLE IF NOT EXISTS reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    post_id INT NOT NULL,
+    reporter_id INT NOT NULL COMMENT 'Người báo cáo',
+    post_id INT NOT NULL COMMENT 'Tin tuyển dụng bị báo cáo',
+    employer_id INT NOT NULL COMMENT 'Người đăng tin (nhà tuyển dụng)',
     reason TEXT NOT NULL,
     status ENUM('PENDING', 'RESOLVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
     resolution_result TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    INDEX idx_user_id (user_id),
+    INDEX idx_reporter_id (reporter_id),
     INDEX idx_post_id (post_id),
+    INDEX idx_employer_id (employer_id),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Với DB đã có bảng reports phiên bản cũ, chạy sql/migrate_reports_schema.sql
+-- để đổi user_id thành reporter_id và bổ sung employer_id cùng timestamps.
+-- CREATE TABLE IF NOT EXISTS không tự cập nhật cấu trúc bảng đã tồn tại.
 
 -- ============================================
 -- 5. SEED DỮ LIỆU: 15 NGÀNH NGHỀ
