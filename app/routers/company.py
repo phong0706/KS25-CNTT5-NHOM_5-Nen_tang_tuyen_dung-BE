@@ -15,10 +15,17 @@ from app.core.config import settings
 from app.core.security import get_current_user
 from app.crud import company as company_crud
 from app.db.session import get_db
+from app.models.company import CompanyStatus
 from app.models.user import User
-from app.schemas.company_schema import CompanyProfileUpdate, CompanyResponse
+from app.schemas.company_schema import (
+    CompanyProfileUpdate,
+    CompanyResponse,
+    CompanyVerificationDecision,
+    CompanyVerificationSubmit,
+)
 
 router = APIRouter(prefix="/company", tags=["Company"])
+admin_router = APIRouter(prefix="/admin/companies", tags=["Company verification - Admin"])
 
 # ------------------------------------------------------------------
 # Hằng số upload
@@ -39,6 +46,12 @@ def _require_employer(current_user: User = Depends(get_current_user)) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Chỉ nhà tuyển dụng (employer) mới được thực hiện thao tác này",
         )
+    return current_user
+
+
+def _require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ Admin mới được thực hiện thao tác này")
     return current_user
 
 
@@ -72,6 +85,11 @@ def _save_upload(file: UploadFile, subfolder: str) -> str:
 
     # Đọc nội dung và kiểm tra dung lượng
     content = file.file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File ảnh không được để trống",
+        )
     if len(content) > _MAX_BYTES:
         mb = _MAX_BYTES // (1024 * 1024)
         raise HTTPException(
@@ -160,3 +178,82 @@ def upload_cover(
     """
     cover_url = _save_upload(file, "covers")
     return company_crud.update_company_cover(db, company, cover_url)
+
+
+@router.post(
+    "/me/verification-document",
+    response_model=CompanyResponse,
+    summary="Tải ảnh giấy phép kinh doanh",
+)
+def upload_verification_document(
+    file: UploadFile = File(..., description="Ảnh giấy phép kinh doanh (.jpg hoặc .png)"),
+    company=Depends(_get_my_company),
+    db: Session = Depends(get_db),
+):
+    company.verification_document = _save_upload(file, "verification")
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.post(
+    "/me/verification",
+    response_model=CompanyResponse,
+    summary="Gửi hồ sơ xác minh công ty",
+)
+def submit_verification(
+    data: CompanyVerificationSubmit,
+    company=Depends(_get_my_company),
+    db: Session = Depends(get_db),
+):
+    if company.status == CompanyStatus.VERIFIED:
+        raise HTTPException(status_code=409, detail="Công ty đã được xác minh")
+    if not company.verification_document:
+        raise HTTPException(
+            status_code=422,
+            detail="Vui lòng tải ảnh giấy phép kinh doanh trước khi gửi xác minh",
+        )
+    if not data.tax_code.strip():
+        raise HTTPException(status_code=422, detail="Mã số thuế không được để trống")
+    return company_crud.submit_company_verification(db, company, data.tax_code)
+
+
+@admin_router.get(
+    "/verifications",
+    response_model=list[CompanyResponse],
+    summary="Danh sách hồ sơ công ty chờ xác minh",
+)
+def list_company_verifications(
+    _admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    return company_crud.get_pending_verifications(db)
+
+
+@admin_router.post(
+    "/{company_id}/verification",
+    response_model=CompanyResponse,
+    summary="Duyệt hoặc từ chối hồ sơ xác minh",
+)
+def review_company_verification(
+    company_id: int,
+    data: CompanyVerificationDecision,
+    _admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    company = company_crud.get_company_for_review(db, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy công ty")
+    if company.status != CompanyStatus.PENDING:
+        raise HTTPException(status_code=409, detail="Hồ sơ công ty không còn ở trạng thái chờ duyệt")
+    if company.verification_submitted_at is None:
+        raise HTTPException(status_code=409, detail="Công ty chưa gửi hồ sơ xác minh")
+    if data.status == "REJECTED" and not (data.reason and data.reason.strip()):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập lý do từ chối")
+
+    return company_crud.decide_company_verification(
+        db,
+        company,
+        status=CompanyStatus(data.status),
+        reason=data.reason.strip() if data.reason else None,
+    )
