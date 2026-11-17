@@ -127,3 +127,13 @@ def me(current_user=Depends(get_current_user)):
     Cần header: `Authorization: Bearer <access_token>`
     """
     return current_user
+
+
+@router.post(
+    "/logout",
+    summary="Đăng xuất tài khoản",
+)
+def logout():
+    """Đăng xuất người dùng phía client."""
+    return {"message": "Đã đăng xuất thành công"}
+
