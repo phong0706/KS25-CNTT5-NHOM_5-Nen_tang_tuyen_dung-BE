@@ -81,6 +81,11 @@ class Company(Base):
     # Cờ đánh dấu công ty nháp lúc đăng ký
     is_draft: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Quản lý trạng thái & lịch sử tải lên logo (active | removed | missing)
+    logo_status: Mapped[str] = mapped_column(String(20), default="missing", nullable=False)
+    logo_uploaded_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    logo_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Thời gian tạo / cập nhật
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

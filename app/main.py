@@ -18,6 +18,8 @@ from app.core.config import settings
 from app.db.session import Base, engine
 from app.routers import (
     admin_applications,
+    admin_audit_and_cvs,
+    admin_companies_cvs,
     admin_interview,
     applications,
     auth,
@@ -74,6 +76,7 @@ def _log(message: str) -> None:
 upload_dir_path = Path(settings.UPLOAD_DIR)
 upload_dir_path.mkdir(parents=True, exist_ok=True)
 (upload_dir_path / "avatars").mkdir(parents=True, exist_ok=True)
+(upload_dir_path / "logos").mkdir(parents=True, exist_ok=True)
 
 cv_upload_dir_str = getattr(settings, "CV_UPLOAD_DIR", None)
 if cv_upload_dir_str:
@@ -146,6 +149,8 @@ app.include_router(tools.router, prefix="/api")
 app.include_router(interview.router, prefix="/api")
 app.include_router(admin_interview.router, prefix="/api")
 app.include_router(admin_applications.router, prefix="/api")
+app.include_router(admin_companies_cvs.router, prefix="/api")
+app.include_router(admin_audit_and_cvs.router, prefix="/api")
 app.include_router(candidate_cover_letters.router, prefix="/api")
 app.include_router(candidate_cv_documents.router, prefix="/api")
 app.include_router(matching.router)
