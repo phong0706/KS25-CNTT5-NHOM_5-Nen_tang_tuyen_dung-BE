@@ -182,7 +182,7 @@ def list_admin_audit_logs(
         {
             "id": r.id, "actor_id": r.actor_id, "actor_name": r.actor_name, "actor_role": r.actor_role,
             "target_type": r.target_type, "target_id": r.target_id, "target_label": r.target_label,
-            "action": r.action, "old_value": r.old_value, "new_value": r.new_value,
+            "action": r.action, "old_value": r.old_value, "new_value": r.new_value, "reason": r.reason,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows

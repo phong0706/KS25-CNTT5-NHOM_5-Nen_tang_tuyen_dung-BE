@@ -9,6 +9,7 @@ from app.models.catalog import Industry, Location, Skill  # noqa: F401
 
 # 2. Công ty (FK → users)
 from app.models.company import Company, CompanyStatus  # noqa: F401
+from app.models.company_verification import CompanyVerification  # noqa: F401
 
 # 3. Hồ sơ ứng viên
 from app.models.candidate_profile import (  # noqa: F401

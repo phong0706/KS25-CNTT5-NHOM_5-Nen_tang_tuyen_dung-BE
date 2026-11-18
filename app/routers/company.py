@@ -17,6 +17,7 @@ from app.crud import company as company_crud
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.company_schema import CompanyProfileUpdate, CompanyResponse
+from app.services.company_verification_actions import handle_employer_mst_update_if_changed
 
 router = APIRouter(prefix="/company", tags=["Company"])
 
@@ -113,13 +114,15 @@ def get_my_company(company=Depends(_get_my_company)):
 def update_my_company(
     data: CompanyProfileUpdate,
     company=Depends(_get_my_company),
+    current_user: User = Depends(_require_employer),
     db: Session = Depends(get_db),
 ):
     """Sửa thông tin hồ sơ công ty.
 
-    Chỉ gửi lên các trường muốn thay đổi; trường không gửi sẽ **giữ nguyên**.
-    Employer **không thể** tự thay đổi `status` (chỉ admin mới được).
+    Nếu sửa MST của công ty đang da_xac_minh -> chuẩn hóa MST, chuyển về cho_duyet & đưa tin mở sang chờ xác minh lại.
     """
+    if data.tax_code is not None:
+        data.tax_code = handle_employer_mst_update_if_changed(db, company, current_user, data.tax_code)
     return company_crud.update_company(db, company, data)
 
 

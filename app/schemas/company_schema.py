@@ -64,6 +64,7 @@ class CompanyResponse(CompanyBase):
     id: int
     employer_id: int
     is_draft: bool
+    verification_status: str = "chua_xac_minh"
     created_at: datetime
     updated_at: datetime
 

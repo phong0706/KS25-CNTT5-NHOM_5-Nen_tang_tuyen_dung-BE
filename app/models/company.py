@@ -77,6 +77,9 @@ class Company(Base):
     status: Mapped[CompanyStatus] = mapped_column(
         SQLEnum(CompanyStatus), default=CompanyStatus.PENDING, nullable=False
     )
+    verification_status: Mapped[str] = mapped_column(
+        String(24), default="chua_xac_minh", nullable=False, index=True
+    )
 
     # Cờ đánh dấu công ty nháp lúc đăng ký
     is_draft: Mapped[bool] = mapped_column(Boolean, default=True)

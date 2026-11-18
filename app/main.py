@@ -21,6 +21,7 @@ from app.routers import (
     admin_audit_and_cvs,
     admin_companies_cvs,
     admin_interview,
+    admin_verifications,
     applications,
     auth,
     candidate_applications,
@@ -38,6 +39,7 @@ from app.routers import (
     employer_applications,
     employer_interviews,
     employer_jobs,
+    employer_verification,
     health,
     industries,
     interview,
@@ -134,6 +136,7 @@ app.include_router(skills.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
 app.include_router(employer_interviews.router, prefix="/api")
+app.include_router(employer_verification.router, prefix="/api")
 
 # search_insights PHẢI được đăng ký TRƯỚC public_jobs và jobs:
 # public_jobs / jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
@@ -155,6 +158,7 @@ app.include_router(admin_interview.router, prefix="/api")
 app.include_router(admin_applications.router, prefix="/api")
 app.include_router(admin_companies_cvs.router, prefix="/api")
 app.include_router(admin_audit_and_cvs.router, prefix="/api")
+app.include_router(admin_verifications.router, prefix="/api")
 app.include_router(candidate_cover_letters.router, prefix="/api")
 app.include_router(candidate_cv_documents.router, prefix="/api")
 app.include_router(matching.router)

@@ -1,6 +1,6 @@
 """Model AuditLog cho bảng nhật ký thay đổi (audit_logs)."""
 from datetime import datetime
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
@@ -18,4 +18,5 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     old_value: Mapped[str | None] = mapped_column(String(500), nullable=True)
     new_value: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
