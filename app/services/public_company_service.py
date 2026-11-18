@@ -1,7 +1,8 @@
 """Dịch vụ danh sách Công ty công khai (/api/companies): lọc, facets, tìm kiếm bỏ dấu, không N+1."""
 from collections import Counter
 from datetime import date
-from sqlalchemy import and_, case, func, or_, select, text
+import time
+from sqlalchemy import String, and_, case, cast, collate, func, literal, or_, select, text, union_all
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
@@ -13,6 +14,8 @@ from app.schemas.company import (
 from app.services.public_company_rules import (
     VALID_SIZE_RANGES, escape_like, slugify_skill, validate_company_media_url, validate_company_website,
 )
+
+_SKILL_MAP_CACHE: tuple[float, dict[str, str]] | None = None
 
 
 def open_job_conds(company_id: int | None = None):
@@ -43,20 +46,26 @@ def job_agg_subquery():
 
 
 def _load_skill_canonical_map(db: Session) -> dict[str, str]:
+    global _SKILL_MAP_CACHE
+    now = time.monotonic()
+    if _SKILL_MAP_CACHE and now - _SKILL_MAP_CACHE[0] < 60:
+        return _SKILL_MAP_CACHE[1]
     cmap: dict[str, str] = {}
-    id_to_name: dict[int, str] = {}
     try:
-        for sid, name, canonical in db.execute(text("SELECT id, name, canonical_name FROM skills")).all():
+        rows = db.execute(
+            text("SELECT s.name, s.canonical_name, sa.alias FROM skills s LEFT JOIN skill_aliases sa ON sa.skill_id = s.id")
+        ).all()
+        for name, canonical, alias in rows:
             canon = (canonical or name or "").strip()
-            if canon:
-                id_to_name[int(sid)] = canon
-                cmap[str(name).strip().lower()] = canon
-                cmap[canon.lower()] = canon
-        for sid, alias in db.execute(text("SELECT skill_id, alias FROM skill_aliases")).all():
-            if int(sid) in id_to_name and alias:
-                cmap[str(alias).strip().lower()] = id_to_name[int(sid)]
+            if not canon:
+                continue
+            cmap[str(name).strip().lower()] = canon
+            cmap[canon.lower()] = canon
+            if alias:
+                cmap[str(alias).strip().lower()] = canon
     except Exception:
         pass
+    _SKILL_MAP_CACHE = (now, cmap)
     return cmap
 
 
@@ -130,6 +139,23 @@ def _filter_clauses(job_agg, *, q: str, industry: str, location: str, size: str,
     return clauses
 
 
+def _col(expr):
+    return collate(cast(expr, String(160)), "utf8mb4_unicode_ci")
+
+
+def _fetch_facets(db: Session, agg, *, q: str, industry: str, location: str, size: str, hiring: int) -> CompanyFacetsOut:
+    q_ind = select(_col(literal("industry")).label("kind"), _col(MetaCategory.slug).label("val"), _col(MetaCategory.name).label("lbl"), func.count(Company.id).label("cnt")).join(Company, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id).where(*_filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="industry")).group_by(MetaCategory.slug, MetaCategory.name)
+    q_loc = select(_col(literal("location")).label("kind"), _col(MetaLocation.slug).label("val"), _col(MetaLocation.name).label("lbl"), func.count(Company.id).label("cnt")).join(Company, Company.location_id == MetaLocation.id).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(agg, Company.id == agg.c.company_id).where(*_filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="location")).group_by(MetaLocation.slug, MetaLocation.name)
+    q_sz = select(_col(literal("size")).label("kind"), _col(Company.size_range).label("val"), _col(Company.size_range).label("lbl"), func.count(Company.id).label("cnt")).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id).where(*_filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="size"), Company.size_range.is_not(None)).group_by(Company.size_range)
+
+    rows = db.execute(union_all(q_ind, q_loc, q_sz)).all()
+    ind_items = sorted([CompanyFacetItemOut(value=v, label=l, count=int(c)) for k, v, l, c in rows if k == "industry"], key=lambda x: (-x.count, x.label))
+    loc_items = sorted([CompanyFacetItemOut(value=v, label=l, count=int(c)) for k, v, l, c in rows if k == "location"], key=lambda x: (-x.count, x.label))
+    size_map = {str(v): int(c) for k, v, _, c in rows if k == "size"}
+    sz_items = [CompanyFacetItemOut(value=s, label=f"{s} nhân viên", count=size_map[s]) for s in VALID_SIZE_RANGES if size_map.get(s, 0) > 0]
+    return CompanyFacetsOut(industry=ind_items, location=loc_items, size=sz_items)
+
+
 def list_public_companies(
     db: Session, *, q: str, industry: str, location: str, size: str, hiring: int, sort: str, page: int, page_size: int
 ) -> PublicCompanyListOut:
@@ -141,8 +167,12 @@ def list_public_companies(
         .outerjoin(agg, Company.id == agg.c.company_id)
     )
     where_main = _filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring)
-    total = int(db.scalar(select(func.count()).select_from(base_from.where(*where_main).subquery())) or 0)
-    hiring_total = int(db.scalar(select(func.coalesce(func.sum(agg.c.open_jobs), 0)).select_from(Company).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id).where(*where_main)) or 0)
+    tot_row = db.execute(
+        select(func.count(Company.id), func.coalesce(func.sum(agg.c.open_jobs), 0))
+        .select_from(Company).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id)
+        .where(*where_main)
+    ).one()
+    total, hiring_total = int(tot_row[0] or 0), int(tot_row[1] or 0)
 
     open_col = func.coalesce(agg.c.open_jobs, 0)
     order = (
@@ -153,20 +183,5 @@ def list_public_companies(
     rows = db.execute(base_from.where(*where_main).order_by(*order).offset((page - 1) * page_size).limit(page_size)).all()
     skill_map = extract_top_skills_by_company(db, [r[0].id for r in rows], 3)
     items = [build_company_card(r[0], r.ind_slug, r.ind_name, r.loc_name, r, [s.name for s in skill_map.get(r[0].id, [])]) for r in rows]
-
-    w_ind = _filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="industry")
-    ind_rows = db.execute(select(MetaCategory.slug, MetaCategory.name, func.count(Company.id)).join(Company, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id).where(*w_ind).group_by(MetaCategory.slug, MetaCategory.name).order_by(func.count(Company.id).desc(), MetaCategory.name.asc())).all()
-    w_loc = _filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="location")
-    loc_rows = db.execute(select(MetaLocation.slug, MetaLocation.name, func.count(Company.id)).join(Company, Company.location_id == MetaLocation.id).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(agg, Company.id == agg.c.company_id).where(*w_loc).group_by(MetaLocation.slug, MetaLocation.name).order_by(func.count(Company.id).desc(), MetaLocation.name.asc())).all()
-    w_size = _filter_clauses(agg, q=q, industry=industry, location=location, size=size, hiring=hiring, exclude="size")
-    size_rows = db.execute(select(Company.size_range, func.count(Company.id)).outerjoin(MetaCategory, Company.industry_id == MetaCategory.id).outerjoin(MetaLocation, Company.location_id == MetaLocation.id).outerjoin(agg, Company.id == agg.c.company_id).where(*w_size, Company.size_range.is_not(None)).group_by(Company.size_range)).all()
-    size_map = {str(s): int(c) for s, c in size_rows}
-
-    return PublicCompanyListOut(
-        items=items, total=total, page=page, page_size=page_size, hiring_total=hiring_total,
-        facets=CompanyFacetsOut(
-            industry=[CompanyFacetItemOut(value=s, label=n, count=int(c)) for s, n, c in ind_rows],
-            location=[CompanyFacetItemOut(value=s, label=n, count=int(c)) for s, n, c in loc_rows],
-            size=[CompanyFacetItemOut(value=s, label=f"{s} nhân viên", count=size_map[s]) for s in VALID_SIZE_RANGES if size_map.get(s, 0) > 0],
-        ),
-    )
+    facets = _fetch_facets(db, agg, q=q, industry=industry, location=location, size=size, hiring=hiring)
+    return PublicCompanyListOut(items=items, total=total, page=page, page_size=page_size, hiring_total=hiring_total, facets=facets)

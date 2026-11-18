@@ -1,4 +1,4 @@
-"""Migration mở rộng bảng companies + Seed >= 12 công ty công khai (hư cấu cho phần bổ sung).
+"""Chạy SQL migration mở rộng bảng companies + Seed >= 12 công ty công khai (idempotent).
 Cách chạy: cd backend && python scripts/seed_public_companies.py
 """
 from datetime import date, timedelta
@@ -16,19 +16,10 @@ from app.models.job import Job  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services.public_company_rules import normalize_search_text  # noqa: E402
 
-NEW_COMPANY_COLS = {
-    "tagline": "VARCHAR(120) NULL AFTER name",
-    "location_id": "INT NULL AFTER industry_id",
-    "size_range": "ENUM('1-50','51-200','201-500','501-1000','1000+') NULL AFTER address",
-    "founded_year": "SMALLINT NULL AFTER size_range",
-    "is_visible": "BOOLEAN NOT NULL DEFAULT TRUE AFTER description",
-    "is_verified": "BOOLEAN NOT NULL DEFAULT FALSE AFTER is_visible",
-    "verified_at": "DATETIME NULL AFTER is_verified",
-    "search_text": "VARCHAR(500) NULL AFTER verified_at",
-}
+MIGRATION_PATH = BASE_DIR / "sql" / "migrations" / "20261118_companies_public.sql"
 
 FICTIONAL_SEED = [
-    ("ngan-hang-so-dong-a", "Ngân hàng Số Đông Á", "Nền tảng ngân hàng số và thanh toán mở", 1, 2, "201-500", 2018, "https://dongadigital.example.vn", True, True, "Ngân hàng Số Đông Á phát triển hạ tầng thanh toán số, ví điện tử và dịch vụ ngân hàng mở cho doanh nghiệp vừa và nhỏ tại Việt Nam.", [
+    ("dai-duong-digital-labs", "Đại Dương Digital Labs", "Nền tảng ngân hàng số và dữ liệu Đông Á", 1, 2, "201-500", 2018, "https://daiduonglabs.example.vn", True, True, "Đại Dương Digital Labs phát triển hạ tầng ngân hàng số, ví điện tử và cổng thanh toán mở tại khu vực Đông Á.", [
         ("Senior Backend Engineer (Java / Spring)", "Senior", "TP. Hồ Chí Minh", 32000000, 52000000, False, ["Java", "Spring Boot", "PostgreSQL", "Kafka"], 2),
         ("Cloud Security Engineer", "Middle", "TP. Hồ Chí Minh", 24000000, 38000000, False, ["AWS", "Docker", "Kubernetes"], 5),
         ("React Frontend Developer", "Junior", "TP. Hồ Chí Minh", 18000000, 28000000, False, ["React", "TypeScript", "JavaScript"], 7),
@@ -60,25 +51,25 @@ FICTIONAL_SEED = [
 ]
 
 
-def ensure_schema_and_indexes() -> None:
+def run_migration_sql() -> None:
+    raw = MIGRATION_PATH.read_text(encoding="utf-8")
+    lines = [ln for ln in raw.splitlines() if not ln.strip().startswith("--")]
+    stmts = [s.strip() for s in "\n".join(lines).split(";") if s.strip()]
     with engine.begin() as conn:
-        existing = {r[0] for r in conn.execute(text("SHOW COLUMNS FROM companies")).fetchall()}
-        for col, ddl in NEW_COMPANY_COLS.items():
-            if col not in existing:
-                conn.execute(text(f"ALTER TABLE companies ADD COLUMN `{col}` {ddl}"))
-        idx_c = {r[2] for r in conn.execute(text("SHOW INDEX FROM companies")).fetchall()}
-        for name, cols in [("idx_companies_visible_name", "(is_visible, name)"), ("idx_companies_industry_id", "(industry_id)"), ("idx_companies_location_id", "(location_id)"), ("idx_companies_search_text", "(search_text)")]:
-            if name not in idx_c:
-                conn.execute(text(f"ALTER TABLE companies ADD INDEX `{name}` {cols}"))
-        idx_j = {r[2] for r in conn.execute(text("SHOW INDEX FROM jobs")).fetchall()}
-        if "idx_jobs_company_status_pub" not in idx_j:
-            conn.execute(text("ALTER TABLE jobs ADD INDEX `idx_jobs_company_status_pub` (company_id, status, published_at)"))
+        for stmt in stmts:
+            conn.execute(text(stmt))
 
 
 def run_seed() -> None:
-    ensure_schema_and_indexes()
+    run_migration_sql()
     db = SessionLocal()
     try:
+        legacy = db.scalar(select(Company).where(Company.slug == "ngan-hang-so-dong-a"))
+        if legacy and not db.scalar(select(Company).where(Company.slug == "dai-duong-digital-labs")):
+            legacy.slug = "dai-duong-digital-labs"
+            legacy.name = "Đại Dương Digital Labs"
+            db.flush()
+
         for c in db.scalars(select(Company)).all():
             if not c.location_id and c.address:
                 c.location_id = 2 if ("Hồ Chí Minh" in c.address or "Quận" in c.address) else (3 if "Đà Nẵng" in c.address else 1)
@@ -121,7 +112,9 @@ def run_seed() -> None:
                     db.add(j); db.flush()
                     db.execute(text("UPDATE jobs SET published_at = NOW() - INTERVAL :d DAY, created_at = NOW() - INTERVAL :d DAY WHERE id = :jid"), {"d": days_ago, "jid": j.id})
         db.commit()
-        print("[SEED] Hoàn tất mở rộng bảng companies và seed dữ liệu công ty công khai.")
+        comp_cnt = db.execute(text("SELECT COUNT(*) FROM companies")).scalar() or 0
+        job_cnt = db.execute(text("SELECT COUNT(*) FROM jobs")).scalar() or 0
+        print(f"[SEED] Hoàn tất migration + seed. companies={comp_cnt}, jobs={job_cnt}")
     finally:
         db.close()
 
