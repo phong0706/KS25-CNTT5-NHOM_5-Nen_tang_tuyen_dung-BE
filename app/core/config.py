@@ -4,6 +4,7 @@ Muốn thêm cấu hình mới: thêm 1 dòng vào class Settings + thêm vào .
 """
 from urllib.parse import quote_plus
 
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +16,7 @@ class Settings(BaseSettings):
     DB_HOST: str = "127.0.0.1"
     DB_PORT: int = 3306
     DB_USER: str = "root"
-    DB_PASSWORD: str = "21072007"
+    DB_PASSWORD: str
     DB_NAME: str = "app_db"
 
     # Chuỗi các origin cách nhau bằng dấu phẩy, hoặc "*"
@@ -30,8 +31,8 @@ class Settings(BaseSettings):
     CV_MAX_SIZE_MB: int = 5  # Kích thước tối đa 5MB
     CV_MAX_FILES_PER_CANDIDATE: int = 3  # Tối đa 3 CV mỗi ứng viên
 
-    # JWT
-    JWT_SECRET: str = "CHANGE_ME_USE_RANDOM_32_CHARS_AT_LEAST"
+    # JWT (bắt buộc cấu hình trong .env hoặc biến môi trường)
+    JWT_SECRET: str
     JWT_EXPIRE_MINUTES: int = 60 * 24  # 1 ngày
 
     # Upload ảnh (logo / ảnh bìa công ty)
@@ -80,5 +81,12 @@ class Settings(BaseSettings):
         return raw
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except ValidationError as exc:
+    missing = [str(err["loc"][0]) for err in exc.errors() if err.get("loc")]
+    raise RuntimeError(
+        f"Thiếu biến môi trường bắt buộc trong .env: {', '.join(missing)}. "
+        "Hãy copy .env.example thành .env và điền đầy đủ giá trị."
+    ) from exc
 
