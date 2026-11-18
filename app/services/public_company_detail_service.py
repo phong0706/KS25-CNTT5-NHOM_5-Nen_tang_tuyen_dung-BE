@@ -87,7 +87,7 @@ def list_public_company_jobs(
     saved_ids = set(db.scalars(select(SavedJob.job_id).where(SavedJob.user_id == current_user.id, SavedJob.job_id.in_([j.id for j in jobs]))).all()) if (current_user and jobs) else set()
     items = [
         PublicJobCardOut(
-            id=j.id, title=j.title, company_id=c.id, company_name=c.name, location=j.location,
+            id=j.id, title=j.title, company_id=c.id, company_slug=c.slug, company_name=c.name, location=j.location,
             location_slug=loc_slug_map.get(j.location or ""), level=j.level, level_slug=lvl_slug_map.get(j.level or ""),
             work_type=j.work_type, salary_min=j.salary_min, salary_max=j.salary_max,
             is_salary_negotiable=bool(j.is_salary_negotiable), skills=j.skills if isinstance(j.skills, list) else [],

@@ -30,7 +30,7 @@ def list_saved_jobs(
     current_user: User = Depends(role_required("candidate")),
 ):
     stmt = (
-        select(SavedJob, Job, Company.name.label("company_name"))
+        select(SavedJob, Job, Company.name.label("company_name"), Company.slug.label("company_slug"))
         .join(Job, SavedJob.job_id == Job.id)
         .outerjoin(Company, Job.company_id == Company.id)
         .where(SavedJob.user_id == current_user.id)
@@ -66,6 +66,7 @@ def list_saved_jobs(
         sj: SavedJob = row[0]
         jb: Job = row[1]
         comp_name: str = row[2] or "Công ty công nghệ"
+        comp_slug: str | None = row[3]
 
         # Kỹ năng
         skills_list = []
@@ -87,6 +88,7 @@ def list_saved_jobs(
                 id=jb.id,
                 title=jb.title,
                 company_id=jb.company_id,
+                company_slug=comp_slug,
                 company_name=comp_name,
                 location=jb.location,
                 level=jb.level,

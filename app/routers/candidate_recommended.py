@@ -80,7 +80,7 @@ def get_recommended_jobs(
     if scored_jobs is None:
         applied_job_ids = set(db.execute(text("SELECT job_id FROM job_applications WHERE candidate_id = :uid"), {"uid": current_user.id}).scalars().all())
         raw_jobs = db.execute(text("""
-            SELECT j.id, j.title, j.company_id, c.name as company_name, j.location, j.level,
+            SELECT j.id, j.title, j.company_id, c.slug as company_slug, c.name as company_name, j.location, j.level,
                    j.work_type, j.salary_min, j.salary_max, j.is_salary_negotiable,
                    j.skills, j.deadline, j.published_at, j.created_at
             FROM jobs j LEFT JOIN companies c ON j.company_id = c.id WHERE j.status = 'published'
@@ -119,7 +119,7 @@ def get_recommended_jobs(
     items = [
         PublicJobCardOut(
             id=e["raw"].id, title=(e["raw"].title or "").replace("[Seed]", "").strip(),
-            company_id=e["raw"].company_id, company_name=e["raw"].company_name or "Doanh nghiệp tuyển dụng",
+            company_id=e["raw"].company_id, company_slug=e["raw"].company_slug, company_name=e["raw"].company_name or "Doanh nghiệp tuyển dụng",
             location=e["raw"].location, level=e["raw"].level, work_type=e["raw"].work_type,
             salary_min=e["raw"].salary_min, salary_max=e["raw"].salary_max,
             is_salary_negotiable=bool(e["raw"].is_salary_negotiable), skills=e["clean_skills"],

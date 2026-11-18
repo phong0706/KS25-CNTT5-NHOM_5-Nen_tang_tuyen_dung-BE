@@ -53,7 +53,7 @@ def get_application(
     row = db.execute(
         select(
             Application,
-            Job.id.label("jid"), Job.title, Company.name.label("company_name"),
+            Job.id.label("jid"), Job.title, Company.slug.label("company_slug"), Company.name.label("company_name"),
             Job.location, Job.salary_min, Job.salary_max,
             Job.is_salary_negotiable, Job.work_type, Job.status.label("job_status"),
         )
@@ -69,7 +69,7 @@ def get_application(
     meta = sm.get(app.status)
 
     job_summary = AppJobSummary(
-        id=row.jid, title=row.title, company_name=row.company_name,
+        id=row.jid, title=row.title, company_slug=row.company_slug, company_name=row.company_name,
         location=row.location, salary_min=row.salary_min, salary_max=row.salary_max,
         is_salary_negotiable=row.is_salary_negotiable, work_type=row.work_type,
         status=row.job_status,

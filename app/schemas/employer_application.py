@@ -18,6 +18,8 @@ class ApplicantCandidateOut(BaseModel):
 class ApplicantJobOut(BaseModel):
     id: int
     title: str
+    company_slug: str | None = None
+    company_name: str | None = None
 
 
 class EmployerApplicationItemOut(BaseModel):

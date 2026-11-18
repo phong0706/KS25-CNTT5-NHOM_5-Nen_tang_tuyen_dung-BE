@@ -4,7 +4,7 @@ import math
 import statistics
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import String, and_, cast, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user, get_optional_user
@@ -46,6 +46,7 @@ def _build_filters(
     work_type: str = "",
     category: str = "",
     company_id: int | None = None,
+    company: str = "",
     salary_min: int | None = None,
     salary_max: int | None = None,
     skills: str = "",
@@ -87,6 +88,9 @@ def _build_filters(
     if company_id is not None:
         conds.append(Job.company_id == company_id)
 
+    if company.strip():
+        conds.append(Company.slug == company.strip().lower())
+
     if salary_min is not None:
         conds.append(or_(Job.salary_max >= salary_min, Job.salary_min >= salary_min))
 
@@ -95,7 +99,11 @@ def _build_filters(
 
     if skills.strip():
         for sk in _split_csv(skills)[:15]:
-            conds.append(func.json_contains(Job.skills, func.json_quote(sk)) == 1)
+            sk_norm = sk.lower().replace("-", " ")
+            conds.append(or_(
+                func.json_contains(Job.skills, func.json_quote(sk)) == 1,
+                func.lower(cast(Job.skills, String(2000))).like(f'%"{sk_norm}"%'),
+            ))
 
     return conds
 
@@ -149,6 +157,7 @@ def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_
             func.count(func.distinct(Job.id)).label("cnt"),
         )
         .select_from(Job)
+        .outerjoin(Company, Job.company_id == Company.id)
         .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
         .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
         .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
@@ -173,6 +182,7 @@ def search_public_jobs(
     type: str = Query("", max_length=200),
     category: str = Query("", max_length=200),
     company_id: int | None = Query(None, ge=1),
+    company: str = Query("", max_length=120),
     salary_min: int | None = Query(None, ge=0),
     salary_max: int | None = Query(None, ge=0),
     skills: str = Query("", max_length=300),
@@ -188,7 +198,7 @@ def search_public_jobs(
 ):
     filter_kwargs = dict(
         q=q, location=location, level=level, work_type=type,
-        category=category, company_id=company_id,
+        category=category, company_id=company_id, company=company,
         salary_min=salary_min, salary_max=salary_max, skills=skills,
     )
     conds = _build_filters(**filter_kwargs)
@@ -197,6 +207,7 @@ def search_public_jobs(
         db.scalar(
             select(func.count(func.distinct(Job.id)))
             .select_from(Job)
+            .outerjoin(Company, Job.company_id == Company.id)
             .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
             .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
             .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
@@ -210,6 +221,7 @@ def search_public_jobs(
             db.scalar(
                 select(func.count(func.distinct(Job.company_id)))
                 .select_from(Job)
+                .outerjoin(Company, Job.company_id == Company.id)
                 .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
                 .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
                 .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
@@ -232,6 +244,7 @@ def search_public_jobs(
         select(
             Job,
             Company.name.label("company_name"),
+            Company.slug.label("company_slug"),
             MetaLocation.slug.label("loc_slug"),
             MetaLevel.slug.label("lvl_slug"),
             MetaWorkType.slug.label("wt_slug"),
@@ -351,6 +364,7 @@ def search_public_jobs(
                 id=job.id,
                 title=clean_title,
                 company_id=job.company_id,
+                company_slug=r.company_slug,
                 company_name=r.company_name or "Doanh nghiệp công nghệ",
                 location=job.location,
                 location_slug=r.loc_slug,
@@ -490,6 +504,7 @@ def get_public_job_detail(
         select(
             Job,
             Company.name.label("company_name"),
+            Company.slug.label("company_slug"),
             MetaCategory.name.label("category_name"),
             MetaCategory.slug.label("category_slug"),
         )
@@ -524,6 +539,7 @@ def get_public_job_detail(
         "id": job.id,
         "title": (job.title or "").replace("[Seed] ", "").replace("[Seed]", ""),
         "company_id": job.company_id or job.employer_id,
+        "company_slug": row.company_slug,
         "company_name": row.company_name or "Doanh nghiệp tuyển dụng",
         "company_logo": None,
         "location": job.location,

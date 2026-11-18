@@ -145,6 +145,11 @@ def test_sql_query_count_no_n_plus_1():
     assert r_list_3.status_code == 200
     assert len(q_list_3) <= 6 and len(q_list_3) <= len(q_list_12)
 
+    r_detail_jobs = client.get("/api/jobs", params={"skills": "java", "company": "dai-duong-digital-labs"})
+    assert r_detail_jobs.status_code == 200
+    j_items = r_detail_jobs.json()["items"]
+    assert len(j_items) >= 1 and all(x["company_slug"] == "dai-duong-digital-labs" for x in j_items)
+
     pcs._SKILL_MAP_CACHE = None
     with count_sql_queries() as q_detail:
         r_detail = client.get("/api/companies/dai-duong-digital-labs")

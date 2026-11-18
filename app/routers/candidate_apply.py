@@ -37,6 +37,7 @@ router = APIRouter(tags=["Candidate Applications"])
 _JOB_COLS = (
     Job.id,
     Job.title,
+    Company.slug.label("company_slug"),
     Company.name.label("company_name"),
     Job.location,
     Job.salary_min,
@@ -53,7 +54,7 @@ def _smap(db: Session) -> dict[str, MetaApplicationStatus]:
 
 def _job_summary(r) -> AppJobSummary:
     return AppJobSummary(
-        id=r.id, title=r.title, company_name=r.company_name,
+        id=r.id, title=r.title, company_slug=getattr(r, "company_slug", None), company_name=r.company_name,
         location=r.location, salary_min=r.salary_min, salary_max=r.salary_max,
         is_salary_negotiable=r.is_salary_negotiable, work_type=r.work_type,
         status=r.job_status,

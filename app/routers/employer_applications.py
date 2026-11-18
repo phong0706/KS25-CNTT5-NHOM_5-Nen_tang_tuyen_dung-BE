@@ -17,6 +17,7 @@ from app.models.application import (
     MetaApplicationStatus, MetaRejectionReason,
 )
 from app.models.candidate import CandidateProfile
+from app.models.company import Company
 from app.models.job import Job
 from app.models.user import User
 from app.schemas.application import AppTabOut, InterviewInfo, StatusHistoryItem
@@ -168,8 +169,12 @@ def get_employer_application_detail(
     app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
     row = db.execute(
-        select(Application, Job.title.label("job_title"), Job.skills.label("job_skills"), User, CandidateProfile.skills_json)
+        select(
+            Application, Job.title.label("job_title"), Job.skills.label("job_skills"),
+            Company.slug.label("comp_slug"), Company.name.label("comp_name"), User, CandidateProfile.skills_json,
+        )
         .join(Job, Application.job_id == Job.id)
+        .outerjoin(Company, Job.company_id == Company.id)
         .join(User, Application.candidate_id == User.id)
         .outerjoin(CandidateProfile, CandidateProfile.user_id == User.id)
         .where(Application.id == app_id, Job.employer_id == current_user.id)
@@ -177,7 +182,7 @@ def get_employer_application_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không thuộc quyền quản lý.")
 
-    app_row, j_title, j_skills, cand, c_skills_json = row
+    app_row, j_title, j_skills, c_slug, c_name, cand, c_skills_json = row
     sm = _smap(db)
     history_rows = db.scalars(
         select(ApplicationStatusHistory).where(ApplicationStatusHistory.application_id == app_id).order_by(ApplicationStatusHistory.changed_at.asc())
@@ -190,7 +195,7 @@ def get_employer_application_detail(
     ]
 
     return EmployerApplicationDetailOut(
-        id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title),
+        id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title, company_slug=c_slug, company_name=c_name),
         candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
         cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
         status=app_row.status, status_label=sm.get(app_row.status).name if sm.get(app_row.status) else app_row.status,
