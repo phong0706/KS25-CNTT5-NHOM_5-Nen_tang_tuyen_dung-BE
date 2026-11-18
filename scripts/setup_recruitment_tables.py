@@ -4,10 +4,10 @@
 - Create interviews
 - Create meta_rejection_reasons & seed data
 """
+from pathlib import Path
 import sys
-import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import text
 from app.db.session import engine

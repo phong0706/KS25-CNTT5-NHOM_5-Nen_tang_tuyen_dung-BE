@@ -3,10 +3,11 @@
 Dùng pymysql trực tiếp với multi-statement / MULTI_STATEMENTS để tránh lỗi tách câu.
 Mỗi kết quả (kể cả SELECT) đều được fetch và bỏ qua, tránh 'Commands out of sync'.
 """
-import os
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE_DIR))
 
 from app.core.config import settings
 import pymysql
@@ -14,7 +15,7 @@ from pymysql.constants import CLIENT
 
 
 def main():
-    sql_path = os.path.join(os.path.dirname(__file__), "sql", "init.sql")
+    sql_path = BASE_DIR / "sql" / "init.sql"
     with open(sql_path, encoding="utf-8") as f:
         sql = f.read()
 

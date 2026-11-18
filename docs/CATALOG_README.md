@@ -47,7 +47,7 @@ BE/
 
 ```bash
 # Trong thư mục BE, chạy:
-python seed_catalog.py
+python scripts/seed_catalog.py
 ```
 
 **Output mẫu:**

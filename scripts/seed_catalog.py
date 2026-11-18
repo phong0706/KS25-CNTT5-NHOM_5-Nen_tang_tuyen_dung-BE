@@ -2,10 +2,15 @@
 Script seed dữ liệu cho các bảng catalog (Industry, Location, Skill).
 
 Cách chạy:
-    python seed_catalog.py
+    python scripts/seed_catalog.py
 
 Lưu ý: Chạy sau khi đã tạo bảng bằng SQL hoặc Base.metadata.create_all()
 """
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from sqlalchemy.orm import Session
 from app.db.session import engine, Base
 from app.models.catalog import Industry, Location, Skill
