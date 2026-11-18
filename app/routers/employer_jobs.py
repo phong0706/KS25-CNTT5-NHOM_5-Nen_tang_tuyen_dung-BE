@@ -426,14 +426,19 @@ def create_employer_job(
     current_user: User = Depends(role_required("employer")),
 ):
     _validate_job_payload(body)
-<<<<<<< HEAD
     company = enforce_company_job_rule(db, current_user.id, body.status, is_creating=True)
     if company is None:
         company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-=======
-    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-    company_verified = company is not None and company.status == CompanyStatus.VERIFIED
->>>>>>> origin/develop
+    company_verified = (
+        company is not None
+        and company.status == CompanyStatus.VERIFIED
+        and company.verification_status == "da_xac_minh"
+    )
+    if not company_verified and body.status != "draft":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
+        )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -470,11 +475,16 @@ def update_employer_job(
 ):
     _validate_job_payload(body)
     job = _get_owned_job(db, job_id, current_user.id)
-<<<<<<< HEAD
-    enforce_company_job_rule(db, current_user.id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline)
-=======
-    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
->>>>>>> origin/develop
+    company = enforce_company_job_rule(
+        db, current_user.id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline
+    )
+    if company is None:
+        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+    if (company is None or company.status != CompanyStatus.VERIFIED) and body.status != "draft":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
+        )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -492,7 +502,7 @@ def update_employer_job(
     job.is_salary_negotiable = body.is_salary_negotiable
     job.benefits = clean_benefits
     # Cho phép nâng từ draft lên pending; nếu tin đang published/hidden/closed giữ trạng thái hiện tại trừ khi sửa draft
-    if company is None or company.status != CompanyStatus.VERIFIED:
+    if (company is None or company.status != CompanyStatus.VERIFIED or company.verification_status != "da_xac_minh") and job.status != "reverify_pending":
         job.status = "draft"
         job.published_at = None
     elif job.status == "draft" and body.status in ("draft", "pending"):

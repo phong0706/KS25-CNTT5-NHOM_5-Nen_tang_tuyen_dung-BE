@@ -17,17 +17,13 @@ from app.crud import company as company_crud
 from app.db.session import get_db
 from app.models.company import CompanyStatus
 from app.models.user import User
-<<<<<<< HEAD
-from app.schemas.company_schema import CompanyProfileUpdate, CompanyResponse
-from app.services.company_verification_actions import handle_employer_mst_update_if_changed
-=======
 from app.schemas.company_schema import (
     CompanyProfileUpdate,
     CompanyResponse,
     CompanyVerificationDecision,
     CompanyVerificationSubmit,
 )
->>>>>>> origin/develop
+from app.services.company_verification_actions import handle_employer_mst_update_if_changed
 
 router = APIRouter(prefix="/company", tags=["Company"])
 admin_router = APIRouter(prefix="/admin/companies", tags=["Company verification - Admin"])

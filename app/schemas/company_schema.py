@@ -75,13 +75,10 @@ class CompanyResponse(CompanyBase):
     employer_id: int
     owner_id: int | None = None
     is_draft: bool
-<<<<<<< HEAD
     verification_status: str = "chua_xac_minh"
-=======
     verification_document: str | None = None
     verification_rejection_reason: str | None = None
     verification_submitted_at: datetime | None = None
->>>>>>> origin/develop
     created_at: datetime
     updated_at: datetime
 
