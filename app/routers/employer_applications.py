@@ -16,7 +16,7 @@ from app.models.application import (
     Application, ApplicationNote, ApplicationStatusHistory, CV, Interview,
     MetaApplicationStatus, MetaRejectionReason,
 )
-from app.models.candidate_profile import CandidateProfile
+from app.models.candidate import CandidateProfile
 from app.models.job import Job
 from app.models.user import User
 from app.schemas.application import AppTabOut, InterviewInfo, StatusHistoryItem

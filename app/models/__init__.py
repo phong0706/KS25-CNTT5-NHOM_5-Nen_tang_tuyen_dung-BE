@@ -12,16 +12,15 @@ from app.models.company import Company, CompanyStatus  # noqa: F401
 from app.models.company_verification import CompanyVerification  # noqa: F401
 
 # 3. Hồ sơ ứng viên
+from app.models.candidate import (  # noqa: F401
+    CandidateProfile,
+    CandidateSkill,
+    Education,
+    Experience,
+)
 from app.models.candidate_profile import (  # noqa: F401
     CandidateEducation,
     CandidateExperience,
-    CandidateProfile,
-)
-from app.models.candidate import (  # noqa: F401
-    CandidateSkill,
-    Cv,
-    Education,
-    Experience,
 )
 
 # 4. Việc làm & kỹ năng công việc

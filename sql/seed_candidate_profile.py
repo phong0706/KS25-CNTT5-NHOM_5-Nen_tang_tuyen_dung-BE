@@ -9,10 +9,10 @@ from sqlalchemy import select  # noqa: E402
 
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import Base, SessionLocal, engine  # noqa: E402
+from app.models.candidate import CandidateProfile  # noqa: E402
 from app.models.candidate_profile import (  # noqa: E402
     CandidateEducation,
     CandidateExperience,
-    CandidateProfile,
 )
 from app.models.user import User  # noqa: E402
 

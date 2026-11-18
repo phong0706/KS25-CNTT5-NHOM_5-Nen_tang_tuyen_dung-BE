@@ -22,7 +22,6 @@ class CandidateProfile(Base):
     """Hồ sơ ứng viên — quan hệ 1-1 với bảng users (liên kết qua user_id)."""
 
     __tablename__ = "candidate_profiles"
-    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -71,6 +70,9 @@ class CandidateProfile(Base):
     )
     educations: Mapped[list["Education"]] = relationship(
         "Education", back_populates="profile", cascade="all, delete-orphan"
+    )
+    cvs: Mapped[list["Cv"]] = relationship(
+        "CV", primaryjoin="foreign(CV.candidate_id) == CandidateProfile.user_id", viewonly=True
     )
 
 
