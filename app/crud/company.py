@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company, CompanyStatus
 from app.models.job import Job
+from app.models.user import User
 from app.schemas.company_schema import CompanyProfileUpdate
 from app.services.notification import NotificationType, create_notification
 
@@ -60,9 +61,42 @@ def update_company(db: Session, company: Company, data: CompanyProfileUpdate) ->
     return company
 
 
-def update_company_logo(db: Session, company: Company, logo_url: str) -> Company:
-    """Cập nhật URL logo công ty."""
+def update_company_logo(db: Session, company: Company, logo_url: str, user_id: int | None = None) -> Company:
+    """Cập nhật URL logo công ty và đưa về trạng thái chờ duyệt, gửi thông báo cho admin."""
     company.logo = logo_url
+    company.logo_url = logo_url
+    company.logo_status = "pending"
+    if user_id:
+        company.logo_uploaded_by = user_id
+    company.logo_uploaded_at = datetime.utcnow()
+
+    # Ghi thông báo cho Admin trong cùng transaction
+    admins = db.scalars(select(User).where(User.role.in_(["admin", "operator"]), User.is_active == True)).all()
+    for adm in admins:
+        create_notification(
+            db,
+            user_id=adm.id,
+            actor_id=user_id or company.employer_id,
+            type=NotificationType.LOGO_PENDING,
+            title="Logo công ty chờ duyệt",
+            message=f"Công ty {company.name} vừa gửi logo chờ duyệt.",
+            link="/pages/items.html?tab=logo_pending",
+            ref_type="company_logo",
+            ref_id=company.id,
+        )
+
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+def remove_company_logo(db: Session, company: Company) -> Company:
+    """Gỡ logo công ty và chuyển trạng thái về removed."""
+    company.logo = None
+    company.logo_url = None
+    company.logo_status = "removed"
+    company.logo_uploaded_by = None
+    company.logo_uploaded_at = None
     db.commit()
     db.refresh(company)
     return company

@@ -29,6 +29,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Company Verifications"])
 
 class ApproveBodyIn(BaseModel):
     version: Optional[int] = None
+    checked_criteria: Optional[list[str]] = None
 
 
 class ReasonActionBodyIn(BaseModel):
@@ -156,7 +157,7 @@ def post_admin_approve_verification(
     current_user: User = Depends(_require_admin_or_operator),
     db: Session = Depends(get_db),
 ):
-    return approve_verification_request(db, verif_id, current_user, body.version, idempotency_key)
+    return approve_verification_request(db, verif_id, current_user, body.version, idempotency_key, body.checked_criteria)
 
 
 @router.post("/company-verifications/{verif_id}/reject", summary="Admin từ chối yêu cầu xác minh (lý do bắt buộc >= 10 ký tự)")

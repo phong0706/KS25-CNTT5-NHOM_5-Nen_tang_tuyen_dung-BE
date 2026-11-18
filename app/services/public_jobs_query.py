@@ -1,29 +1,26 @@
 """Dịch vụ truy vấn, lọc facets và sắp xếp việc làm công khai."""
-from datetime import datetime
+from datetime import date, datetime
 import json
 import math
 
 from sqlalchemy import String, and_, case, cast, func, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models.company import Company
+from app.models.company import Company, CompanyStatus
 from app.models.job import Job, MetaCategory, MetaLevel, MetaLocation, MetaWorkType, SavedJob
 from app.models.user import User
 from app.schemas.job import FacetItemOut, PublicJobCardOut, PublicJobsFacetsOut, PublicJobsSearchOut
 from app.services.matching import compute_job_match
 
+
 def _split_csv(val: str) -> list[str]:
     return [x.strip() for x in val.split(",") if x.strip()]
 
 
-def build_public_job_filters(
-    *,
-    q: str = "", location: str = "", level: str = "", work_type: str = "",
-    category: str = "", company_id: int | None = None, company: str = "",
-    salary_min: int | None = None, salary_max: int | None = None,
-    skills: str = "", exclude: str = "",
-):
-    conds = [Job.status == "published"]
+def build_public_job_filters(*, q: str = "", location: str = "", level: str = "", work_type: str = "", category: str = "", company_id: int | None = None, company: str = "", salary_min: int | None = None, salary_max: int | None = None, skills: str = "", exclude: str = ""):
+    today = date.today()
+    comp_ok = or_(Company.verification_status == "da_xac_minh", Company.status == CompanyStatus.VERIFIED, Company.is_verified == True)  # noqa: E712
+    conds = [Job.status.in_(["open", "published"]), Job.deleted_at.is_(None), or_(Job.deadline.is_(None), Job.deadline >= today), comp_ok]
     kw = q.strip()
     if kw:
         tokens = [t for t in kw.replace("-", " ").split() if len(t) >= 2]

@@ -14,6 +14,8 @@ class CompanyBase(BaseModel):
     owner_id: int = Field(examples=[2], description="ID user (employer) làm chủ công ty")
     name: str = Field(min_length=1, max_length=255, examples=["FPT Software"])
     logo: str | None = Field(default=None, max_length=500, examples=["https://example.com/logos/fpt.png"])
+    logo_url: str | None = Field(default=None, max_length=500, examples=["https://example.com/logos/fpt.png"])
+    logo_status: str = Field(default="missing", max_length=20, examples=["active"])
     cover_image: str | None = Field(default=None, max_length=500, examples=["https://example.com/covers/fpt.png"])
     tax_code: str | None = Field(default=None, max_length=50, examples=["0301363748"])
     company_size: str | None = Field(default=None, max_length=50, examples=["1000+"])
