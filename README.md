@@ -4,11 +4,18 @@ Backend REST API cho nền tảng tuyển dụng CNTT **TechRecruit** (Nhóm 5 �
 
 ---
 
-## 1. Repo Frontend liên kết & Nhánh đang dùng
+## 1. Repo Frontend liên kết & Nhánh cần checkout
 
 - **Repo Frontend**: https://github.com/phong0706/KS25-CNTT5-NHOM_5-Nen_tang_tuyen_dung-FE.git
-- **Nhánh Frontend đang dùng**: `chore/restructure-project`
-- **Nhánh Backend hiện tại**: `add/chucnang`
+- **Nhánh Frontend cần checkout**: `chore/restructure-project`
+- **Nhánh Backend cần checkout**: `add/chucnang`
+
+> **Lưu ý quan trọng khi mới clone**: Mặc định `git clone` sẽ đứng ở `main`. Hãy chạy ngay:
+> ```bash
+> git clone https://github.com/phong0706/KS25-CNTT5-NHOM_5-Nen_tang_tuyen_dung-BE.git
+> cd KS25-CNTT5-NHOM_5-Nen_tang_tuyen_dung-BE
+> git checkout add/chucnang
+> ```
 
 ---
 
@@ -45,6 +52,7 @@ Mở `.env` và điền các giá trị bắt buộc (ứng dụng sẽ **dừng
   ```
 
 > Tuyệt đối không commit file `.env` lên Git (đã được chặn trong `.gitignore`).
+> **Lưu ý**: Đổi `JWT_SECRET` sẽ làm mọi token đăng nhập cũ không còn dùng được — toàn bộ người dùng đang mở phiên cũ cần đăng nhập lại để nhận token mới.
 
 ---
 
@@ -78,7 +86,7 @@ Chạy lần lượt các tệp SQL trong thư mục `sql/` trên MySQL 8.0 (`ut
 7. `sql/candidate_profiles.sql` — Tạo bảng `candidate_profiles`, `candidate_skills`, `experiences`, `educations`.
 8. `sql/jobs_module.sql` — Tạo bảng `jobs`, `job_skills`, `saved_jobs` và các bảng danh mục việc làm.
 9. `sql/applications_and_interviews.sql` — Tạo bảng `cvs`, `applications`, `application_status_history`, `interviews`, mẫu thư.
-10. Các bản vá bổ sung (chạy sau cùng):
+10. Các bản vá bổ sung *(thứ tự tương đối giữa các file patch/migration độc lập ở nhóm này có thể linh hoạt miễn chạy sau các bảng gốc ở bước 1–9)*:
     - `sql/patch_notifications.sql` *(bảng `notifications`)*
     - `sql/patch_forgot_password.sql` *(bảng `password_reset_tokens`)*
     - `sql/patch_mega_menu.sql`
