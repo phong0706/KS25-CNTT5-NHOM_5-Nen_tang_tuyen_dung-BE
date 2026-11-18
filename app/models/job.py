@@ -106,6 +106,7 @@ class Job(Base):
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    experience_level: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -145,10 +146,7 @@ class JobApplication(Base):
 
 class SavedJob(Base):
     __tablename__ = "saved_jobs"
-    __table_args__ = (
-        Index("idx_saved_user_id", "user_id"),
-        {"extend_existing": True},
-    )
+    __table_args__ = (Index("idx_saved_user_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(

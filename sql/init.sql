@@ -35,13 +35,33 @@ CREATE TABLE IF NOT EXISTS users(
 CREATE TABLE IF NOT EXISTS companies (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,
+    tagline     VARCHAR(120) NULL,
+    slug        VARCHAR(120) NULL UNIQUE,
     employer_id INT NOT NULL,
+    industry_id INT NULL,
+    location_id INT NULL,
+    address     VARCHAR(500) NULL,
+    size_range  ENUM('1-50','51-200','201-500','501-1000','1000+') NULL,
+    founded_year SMALLINT NULL,
+    website     VARCHAR(255) NULL,
+    logo_url    VARCHAR(500) NULL,
+    cover_url   VARCHAR(500) NULL,
+    description TEXT NULL,
+    is_visible  BOOLEAN NOT NULL DEFAULT TRUE,
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verified_at DATETIME NULL,
+    search_text VARCHAR(500) NULL,
     is_draft    BOOLEAN NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_company_employer
         FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_employer_id (employer_id)
+    INDEX idx_employer_id (employer_id),
+    INDEX idx_companies_visible_name (is_visible, name),
+    INDEX idx_companies_industry_id (industry_id),
+    INDEX idx_companies_location_id (location_id),
+    INDEX idx_companies_search_text (search_text)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------------ --

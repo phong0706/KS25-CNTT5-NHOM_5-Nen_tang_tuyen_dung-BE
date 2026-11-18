@@ -171,6 +171,7 @@ class PublicJobCardOut(BaseModel):
     id: int
     title: str
     company_id: int | None = None
+    company_slug: str | None = None
     company_name: str
     location: str | None = None
     location_slug: str | None = None

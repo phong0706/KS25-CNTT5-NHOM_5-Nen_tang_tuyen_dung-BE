@@ -65,6 +65,7 @@ class AppAllowedAction(BaseModel):
 class AppJobSummary(BaseModel):
     id: int
     title: str
+    company_slug: str | None = None
     company_name: str | None = None
     location: str | None = None
     salary_min: int | None = None

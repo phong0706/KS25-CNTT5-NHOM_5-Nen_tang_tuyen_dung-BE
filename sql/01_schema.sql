@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.45, for Win64 (x86_64)
 --
--- Host: 127.0.0.1    Database: app_db
+-- Host: localhost    Database: app_db
 -- ------------------------------------------------------
 -- Server version	8.0.45
 
@@ -1133,4 +1133,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-18 16:15:16
+-- Dump completed on 2026-11-18 16:28:40
