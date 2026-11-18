@@ -1,9 +1,12 @@
 """Script seed 45 câu hỏi phỏng vấn IT cho bảng interview_questions.
 Tuân thủ techrecruit-rules: dữ liệu chuẩn, không sao chép TopCV, không có tiền tố [Seed].
 """
-import os, sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from dotenv import load_dotenv; load_dotenv()
+from pathlib import Path
+import sys
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE_DIR))
+from dotenv import load_dotenv; load_dotenv(BASE_DIR / ".env")
 from app.db.session import engine
 from sqlalchemy import text
 

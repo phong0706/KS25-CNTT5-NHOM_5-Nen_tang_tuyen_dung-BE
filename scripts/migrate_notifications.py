@@ -1,12 +1,13 @@
 import os
+from pathlib import Path
 import sys
 
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, backend_dir)
+backend_dir = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(backend_dir))
 os.chdir(backend_dir)
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(backend_dir, ".env"))
+load_dotenv(backend_dir / ".env")
 
 from app.db.session import SessionLocal
 from sqlalchemy import text

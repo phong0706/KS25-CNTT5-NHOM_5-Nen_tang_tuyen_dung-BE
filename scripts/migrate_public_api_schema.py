@@ -1,6 +1,10 @@
 """Add columns expected by the current public company and job APIs."""
+from pathlib import Path
 import re
+import sys
 import unicodedata
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import inspect, text
 

@@ -1,8 +1,8 @@
+from pathlib import Path
 import sys
-import os
 
-# đường dẫn thư mục BE vào hệ thống để Python nhận diện được app
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Đường dẫn thư mục backend vào hệ thống để Python nhận diện được app
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.session import SessionLocal
 from app.models.catalog import Industry, Location, Skill

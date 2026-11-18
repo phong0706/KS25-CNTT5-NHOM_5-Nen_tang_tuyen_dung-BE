@@ -2,7 +2,8 @@
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+BASE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE_DIR))
 
 from sqlalchemy import text
 from app.db.session import SessionLocal
@@ -11,7 +12,7 @@ from app.db.session import SessionLocal
 def run_migration() -> None:
     db = SessionLocal()
     try:
-        sql_file = Path(__file__).resolve().parent.parent / "sql" / "migrate_company_verification.sql"
+        sql_file = BASE_DIR / "sql" / "migrate_company_verification.sql"
         ddl = sql_file.read_text(encoding="utf-8")
         for stmt in [s.strip() for s in ddl.split(";") if s.strip()]:
             db.execute(text(stmt))
