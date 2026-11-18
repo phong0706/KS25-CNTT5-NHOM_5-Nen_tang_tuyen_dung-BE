@@ -145,10 +145,7 @@ class JobApplication(Base):
 
 class SavedJob(Base):
     __tablename__ = "saved_jobs"
-    __table_args__ = (
-        Index("idx_saved_user_id", "user_id"),
-        {"extend_existing": True},
-    )
+    __table_args__ = (Index("idx_saved_user_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(

@@ -132,17 +132,19 @@ class Application(Base):
 
 class ApplicationStatusHistory(Base):
     __tablename__ = "application_status_history"
-    __table_args__ = (
-        Index("idx_ash_app_id", "application_id"),
-        {"extend_existing": True},
-    )
+    __table_args__ = (Index("idx_ash_app_id", "application_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     application_id: Mapped[int] = mapped_column(
         ForeignKey("applications.id", ondelete="CASCADE"), nullable=False
     )
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    old_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    new_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     changed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -233,7 +235,6 @@ class Interview(Base):
         Index("idx_interviews_app_id", "application_id"),
         Index("idx_interviews_scheduled_at", "scheduled_at"),
         Index("idx_interviews_created_by", "created_by"),
-        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -243,9 +244,11 @@ class Interview(Base):
     scheduled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     duration_min: Mapped[int] = mapped_column(Integer, default=45)
     mode: Mapped[str] = mapped_column(String(80), default="Trực tuyến qua Google Meet")
+    interview_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     location_or_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     interviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled")
     cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[int | None] = mapped_column(
