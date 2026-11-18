@@ -36,3 +36,5 @@ class CompanyListOut(BaseModel):
 
 class CompanyDetailOut(CompanyOut):
     jobs: list[PublicJobCardOut] = Field(default_factory=list)
+    is_following: bool = Field(default=False, serialization_alias="isFollowing")
+    follower_count: int = Field(default=0, serialization_alias="followerCount")

@@ -55,6 +55,7 @@ class NotificationType:
     JOB_SUBMITTED = "job_submitted"
     JOB_APPROVED = "job_approved"
     JOB_REJECTED = "job_rejected"
+    NEW_JOB_FROM_FOLLOWED_COMPANY = "NEW_JOB_FROM_FOLLOWED_COMPANY"
     # Hồ sơ / CV
     CV_UPLOADED = "cv_uploaded"
     CV_DELETED = "cv_deleted"
@@ -134,6 +135,28 @@ def build_notification_content(
         href = f"/pages/candidate/applications.html?app_id={app_id}" if app_id else (fallback_href or "/pages/candidate/applications.html")
         return title, body, href
 
+    if notif_type == NotificationType.NEW_JOB_FROM_FOLLOWED_COMPANY:
+        company = data.get("companyName") or "Công ty bạn theo dõi"
+        job_title = data.get("jobTitle") or "tin tuyển dụng mới"
+        details = " · ".join(
+            value
+            for value in (
+                data.get("location"),
+                "Thỏa thuận"
+                if data.get("isSalaryNegotiable")
+                else _format_job_salary(data.get("salaryMin"), data.get("salaryMax")),
+            )
+            if value
+        )
+        body = f"{company} vừa đăng tin {job_title}"
+        if details:
+            body = f"{body} ({details})."
+        else:
+            body = f"{body}."
+        job_id = data.get("jobId")
+        href = f"/pages/job-detail.html?id={job_id}" if job_id else (fallback_href or "")
+        return f"{company} có tin tuyển dụng mới", body, href
+
     # Fallback cho các loại khác
     title = fallback_title or _TYPE_TITLES.get(notif_type) or "Thông báo"
     body = fallback_body or ""
@@ -151,10 +174,21 @@ _TYPE_TITLES: dict[str, str] = {
     NotificationType.JOB_SUBMITTED: "Đã gửi tin chờ duyệt",
     NotificationType.JOB_APPROVED: "Tin tuyển dụng đã được duyệt",
     NotificationType.JOB_REJECTED: "Tin tuyển dụng chưa được duyệt",
+    NotificationType.NEW_JOB_FROM_FOLLOWED_COMPANY: "Công ty bạn theo dõi có tin tuyển dụng mới",
     NotificationType.CV_UPLOADED: "CV đã được tải lên thành công",
     NotificationType.CV_DELETED: "CV đã được xoá",
     NotificationType.SYSTEM: "Thông báo từ hệ thống",
 }
+
+
+def _format_job_salary(salary_min: Any, salary_max: Any) -> str | None:
+    if salary_min is not None and salary_max is not None:
+        return f"{salary_min:,}–{salary_max:,} VNĐ"
+    if salary_min is not None:
+        return f"Từ {salary_min:,} VNĐ"
+    if salary_max is not None:
+        return f"Đến {salary_max:,} VNĐ"
+    return None
 
 
 def _log_error(message: str) -> None:

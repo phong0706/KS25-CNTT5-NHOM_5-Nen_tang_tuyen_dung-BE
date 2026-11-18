@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status as http_status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,10 @@ from app.schemas.job import (
     JobTabOut,
 )
 from app.services.notification import notify_job_status_changed
+from app.services.company_follow_notifications import (
+    PublishedJobEvent,
+    send_followed_company_job_notifications,
+)
 
 router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
 
@@ -245,6 +249,7 @@ def _get_owned_job(db: Session, job_id: int, employer_id: int) -> Job:
 def patch_job_status(
     job_id: int,
     body: JobStatusPatchIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required("employer")),
 ):
@@ -256,6 +261,7 @@ def patch_job_status(
         )
 
     job = _get_owned_job(db, job_id, current_user.id)
+    was_published = job.status == "published"
     allowed_from, next_status, undo_action, message = TRANSITIONS[action]
     if job.status not in allowed_from:
         raise HTTPException(
@@ -291,6 +297,23 @@ def patch_job_status(
 
     db.commit()
     db.refresh(job)
+    if not was_published and job.status == "published" and job.company_id:
+        company = db.get(Company, job.company_id)
+        if company:
+            background_tasks.add_task(
+                send_followed_company_job_notifications,
+                PublishedJobEvent(
+                    job_id=job.id,
+                    company_id=company.id,
+                    company_name=company.name,
+                    job_title=job.title,
+                    location=job.location,
+                    salary_min=job.salary_min,
+                    salary_max=job.salary_max,
+                    is_salary_negotiable=bool(job.is_salary_negotiable),
+                    published_at=datetime.utcnow(),
+                ),
+            )
     st_label, st_tone = STATUS_META.get(job.status, (job.status, "neutral"))
     return JobActionResultOut(
         id=job.id,

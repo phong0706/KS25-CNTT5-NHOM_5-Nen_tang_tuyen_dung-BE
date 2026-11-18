@@ -5,6 +5,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_optional_user, role_required
+from app.crud.company_follow import count_followers, is_following
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.job import Job, MetaCategory, SavedJob
@@ -174,6 +175,12 @@ def get_company_detail_by_slug(
         description=company.description, industry_id=company.industry_id, industry_name=industry_name,
         size=company.size, website=company.website, address=company.address, job_count=len(job_cards),
         created_at=company.created_at, jobs=job_cards,
+        is_following=bool(
+            current_user
+            and current_user.role == "candidate"
+            and is_following(db, current_user.id, company.id)
+        ),
+        follower_count=count_followers(db, company.id),
     )
 
 
