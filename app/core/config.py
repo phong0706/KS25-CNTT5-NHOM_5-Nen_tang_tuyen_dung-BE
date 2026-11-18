@@ -19,7 +19,11 @@ class Settings(BaseSettings):
     DB_NAME: str = "app_db"
 
     # Chuỗi các origin cách nhau bằng dấu phẩy, hoặc "*"
-    CORS_ORIGINS: str = "*"
+    CORS_ORIGINS: str = (
+        "http://127.0.0.1:5500,http://localhost:5500,"
+        "http://127.0.0.1:5501,http://localhost:5501,"
+        "http://127.0.0.1:5502,http://localhost:5502"
+    )
 
     # CV file upload settings
     CV_UPLOAD_DIR: str = "storage/cvs"  # Thư mục lưu CV (ngoài public)
@@ -59,7 +63,21 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        raw = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        if "*" in raw:
+            return ["*"]
+        required_dev_origins = [
+            "http://127.0.0.1:5500",
+            "http://localhost:5500",
+            "http://127.0.0.1:5501",
+            "http://localhost:5501",
+            "http://127.0.0.1:5502",
+            "http://localhost:5502",
+        ]
+        for o in required_dev_origins:
+            if o not in raw:
+                raw.append(o)
+        return raw
 
 
 settings = Settings()

@@ -94,7 +94,6 @@ def list_admin_candidate_cvs(
         .join(Job, Application.job_id == Job.id)
         .outerjoin(Company, Job.company_id == Company.id)
         .outerjoin(CV, Application.cv_id == CV.id)
-        .where(Application.cv_id.is_not(None))
     )
     kw = q.strip()
     if kw:
@@ -112,16 +111,18 @@ def list_admin_candidate_cvs(
 
     items = []
     for app_row, c_name, c_email, j_title, comp_name, cv_orig, cv_stored, cv_size in rows:
+        has_cv = bool(app_row.cv_id)
         items.append({
             "application_id": app_row.id,
             "cv_id": app_row.cv_id,
+            "has_cv": has_cv,
             "candidate_id": app_row.candidate_id,
             "candidate_name": c_name or "Ứng viên",
             "candidate_email": c_email or "",
             "job_id": app_row.job_id,
             "job_title": j_title or "Tin tuyển dụng",
             "company_name": comp_name or "Doanh nghiệp",
-            "cv_name": app_row.cv_name_snapshot or cv_orig or "CV.pdf",
+            "cv_name": (app_row.cv_name_snapshot or cv_orig or "CV.pdf") if has_cv else None,
             "size_bytes": cv_size or 0,
             "submitted_at": app_row.created_at.isoformat() if app_row.created_at else None,
             "status": app_row.status,
@@ -148,6 +149,11 @@ def open_admin_candidate_cv_file(
     cv = db.get(CV, app_row.cv_id)
     if not cv or not cv.stored_name:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bản ghi CV không tồn tại.")
+    if cv.candidate_id != app_row.candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Dữ liệu liên kết CV không khớp với ứng viên của đơn này.",
+        )
 
     cand = db.get(User, app_row.candidate_id)
     job = db.get(Job, app_row.job_id)

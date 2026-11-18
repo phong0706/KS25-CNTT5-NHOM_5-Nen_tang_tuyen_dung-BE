@@ -31,6 +31,7 @@ from app.routers import (
     candidate_profile,
     candidate_recommended,
     candidate_saved_jobs,
+    career_path,
     companies,
     company,
     cv,
@@ -103,11 +104,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
+_cors_origins = settings.cors_origin_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=_cors_origins,
+    allow_credentials=("*" not in _cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 # Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py & avatars)
@@ -158,6 +162,8 @@ app.include_router(matching.router)
 app.include_router(salary_insights.router, prefix="/api")
 # Thông báo dùng chung (chuông thông báo trên header FE)
 app.include_router(notifications.router, prefix="/api")
+app.include_router(career_path.router, prefix="/api")
+app.include_router(career_path.router)
 
 
 @app.get("/")
