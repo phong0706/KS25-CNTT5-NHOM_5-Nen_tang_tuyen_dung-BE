@@ -15,9 +15,13 @@ from app.models.job_skill import JobSkill
 from app.schemas.job import JobCreate, JobUpdate
 
 
-def _company_for_employer(db: Session, employer_id: int) -> Company:
+def _company_for_employer(
+    db: Session, employer_id: int, *, allow_unverified: bool = False
+) -> Company:
     company = db.scalar(select(Company).where(Company.employer_id == employer_id))
-    if company is None or company.status != CompanyStatus.VERIFIED:
+    if company is None or (
+        not allow_unverified and company.status != CompanyStatus.VERIFIED
+    ):
         raise HTTPException(
             status_code=403, detail="Công ty chưa được xác minh hoặc không tồn tại"
         )
@@ -32,11 +36,16 @@ def _owned_job(
         raise HTTPException(status_code=404, detail="Không tìm thấy tin tuyển dụng")
     if is_admin:
         return job
-    company = _company_for_employer(db, user_id)
+    company = _company_for_employer(db, user_id, allow_unverified=True)
     if job.company_id != company.id:
         raise HTTPException(
             status_code=403,
             detail="Bạn không có quyền thao tác trên tin tuyển dụng của công ty khác",
+        )
+    if company.status != CompanyStatus.VERIFIED and job.status.lower() != "draft":
+        raise HTTPException(
+            status_code=403,
+            detail="Công ty chưa được xác minh, chỉ được thao tác với tin nháp",
         )
     return job
 
@@ -145,7 +154,12 @@ def create_job(
                 status_code=403,
                 detail="Nhà tuyển dụng không được tự chọn company_id",
             )
-        company = _company_for_employer(db, user_id)
+        company = _company_for_employer(db, user_id, allow_unverified=True)
+        if company.status != CompanyStatus.VERIFIED and data.status != "DRAFT":
+            raise HTTPException(
+                status_code=403,
+                detail="Công ty chưa được xác minh, chỉ được tạo tin nháp",
+            )
     skills = _validate_references(
         db, data.industry_id, data.location_id, data.skills
     )
@@ -237,12 +251,17 @@ def change_job_status(
     is_admin: bool = False,
 ) -> dict:
     job = _owned_job(db, job_id, user_id, is_admin=is_admin)
-    if not is_admin and new_status == "OPEN":
-        company = _company_for_employer(db, user_id)
+    if not is_admin:
+        company = _company_for_employer(db, user_id, allow_unverified=True)
         if company.id != job.company_id:
             raise HTTPException(
                 status_code=403,
                 detail="Bạn không có quyền thao tác trên tin tuyển dụng của công ty khác",
+            )
+        if company.status != CompanyStatus.VERIFIED and new_status != "DRAFT":
+            raise HTTPException(
+                status_code=403,
+                detail="Công ty chưa được xác minh, chỉ được lưu tin nháp",
             )
     job.status = new_status
     db.commit()

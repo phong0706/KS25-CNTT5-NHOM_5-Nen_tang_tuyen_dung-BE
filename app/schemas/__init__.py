@@ -10,7 +10,9 @@ from app.schemas.catalog_schema import (
 from app.schemas.report_schema import (
     ReportCreate,
     ReportUpdate,
+    ReportActionIn,
     ReportResponse,
+    AdminReportPageOut,
 )
 
 # Import các schema ứng viên
@@ -77,7 +79,9 @@ __all__ = [
     "CatalogResponse",
     "ReportCreate",
     "ReportUpdate",
+    "ReportActionIn",
     "ReportResponse",
+    "AdminReportPageOut",
     "CandidateSkillCreate",
     "CandidateSkillUpdate",
     "CandidateSkillOut",

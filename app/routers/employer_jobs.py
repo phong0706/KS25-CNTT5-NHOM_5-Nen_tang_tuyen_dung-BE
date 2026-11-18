@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import role_required
 from app.db.session import get_db
-from app.models.company import Company
+from app.models.company import Company, CompanyStatus
 from app.models.job import Job, JobApplication
 from app.models.user import User
 from app.schemas.job import (
@@ -269,6 +269,13 @@ def patch_job_status(
             status_code=http_status.HTTP_409_CONFLICT,
             detail=f"Không thể thực hiện thao tác '{action}' khi tin đang ở trạng thái '{job.status}'",
         )
+    if next_status in ("pending", "published"):
+        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+        if company is None or company.status != CompanyStatus.VERIFIED:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Công ty chưa được xác minh, chỉ được lưu tin nháp",
+            )
 
     # Chỉ trả undo_action nếu tin trước đó đang hiển thị (published) hoặc đóng từ published
     effective_undo = undo_action if (action in ("hide", "close") and job.status == "published") else None
@@ -419,9 +426,14 @@ def create_employer_job(
     current_user: User = Depends(role_required("employer")),
 ):
     _validate_job_payload(body)
+<<<<<<< HEAD
     company = enforce_company_job_rule(db, current_user.id, body.status, is_creating=True)
     if company is None:
         company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+=======
+    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+    company_verified = company is not None and company.status == CompanyStatus.VERIFIED
+>>>>>>> origin/develop
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -441,7 +453,7 @@ def create_employer_job(
         salary_max=None if body.is_salary_negotiable else body.salary_max,
         is_salary_negotiable=body.is_salary_negotiable,
         benefits=clean_benefits,
-        status=body.status,
+        status=body.status if company_verified else "draft",
     )
     db.add(job)
     db.commit()
@@ -458,7 +470,11 @@ def update_employer_job(
 ):
     _validate_job_payload(body)
     job = _get_owned_job(db, job_id, current_user.id)
+<<<<<<< HEAD
     enforce_company_job_rule(db, current_user.id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline)
+=======
+    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+>>>>>>> origin/develop
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -476,7 +492,10 @@ def update_employer_job(
     job.is_salary_negotiable = body.is_salary_negotiable
     job.benefits = clean_benefits
     # Cho phép nâng từ draft lên pending; nếu tin đang published/hidden/closed giữ trạng thái hiện tại trừ khi sửa draft
-    if job.status == "draft" and body.status in ("draft", "pending"):
+    if company is None or company.status != CompanyStatus.VERIFIED:
+        job.status = "draft"
+        job.published_at = None
+    elif job.status == "draft" and body.status in ("draft", "pending"):
         job.status = body.status
 
     db.commit()

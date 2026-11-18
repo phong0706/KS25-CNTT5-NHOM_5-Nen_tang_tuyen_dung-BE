@@ -22,6 +22,12 @@ class CandidateProfile(Base):
     """Hồ sơ ứng viên — quan hệ 1-1 với bảng users (liên kết qua user_id)."""
 
     __tablename__ = "candidate_profiles"
+<<<<<<< HEAD
+=======
+    # Trùng ten bang voi app.models.candidate_profile.CandidateProfile (nhanh cu):
+    # extend_existing=True de SQLAlchemy gop cot thay vi nem InvalidRequestError.
+    __table_args__ = {"extend_existing": True}
+>>>>>>> origin/develop
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -35,6 +41,7 @@ class CandidateProfile(Base):
     github_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     portfolio_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+<<<<<<< HEAD
     skills_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     work_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -144,3 +151,6 @@ class Education(Base):
 
 from app.models.application import CV as Cv  # noqa: E402, F401
 
+=======
+    skills_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+>>>>>>> origin/develop

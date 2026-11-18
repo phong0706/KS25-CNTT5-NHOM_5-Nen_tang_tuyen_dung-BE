@@ -56,6 +56,7 @@ from app.routers import (
     skills,
     tools,
     users,
+    reports,
 )
 
 # Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
@@ -127,6 +128,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(companies.router, prefix="/api")
 app.include_router(company.router, prefix="/api")
+app.include_router(company.admin_router, prefix="/api")
 app.include_router(candidate_profile.router, prefix="/api")
 app.include_router(cv.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
@@ -166,8 +168,13 @@ app.include_router(matching.router)
 app.include_router(salary_insights.router, prefix="/api")
 # Thông báo dùng chung (chuông thông báo trên header FE)
 app.include_router(notifications.router, prefix="/api")
+<<<<<<< HEAD
 app.include_router(career_path.router, prefix="/api")
 app.include_router(career_path.router)
+=======
+# Bao cao vi pham
+app.include_router(reports.router, prefix="/api")
+>>>>>>> origin/develop
 
 
 @app.get("/")
