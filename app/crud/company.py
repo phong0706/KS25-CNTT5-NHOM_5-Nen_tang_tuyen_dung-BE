@@ -79,6 +79,9 @@ def update_company_cover(db: Session, company: Company, cover_url: str) -> Compa
 def submit_company_verification(db: Session, company: Company, tax_code: str) -> Company:
     company.tax_code = tax_code.strip()
     company.status = CompanyStatus.PENDING
+    company.verification_status = "cho_duyet"
+    company.is_verified = False
+    company.verified_at = None
     company.verification_rejection_reason = None
     company.verification_submitted_at = datetime.now()
     company.is_draft = False
@@ -108,6 +111,13 @@ def decide_company_verification(
     reason: str | None,
 ) -> Company:
     company.status = status
+    company.verification_status = (
+        "da_xac_minh" if status == CompanyStatus.VERIFIED
+        else "tu_choi" if status == CompanyStatus.REJECTED
+        else "cho_duyet"
+    )
+    company.is_verified = status == CompanyStatus.VERIFIED
+    company.verified_at = datetime.now() if status == CompanyStatus.VERIFIED else None
     company.verification_rejection_reason = reason if status == CompanyStatus.REJECTED else None
     approved = status == CompanyStatus.VERIFIED
     result = "đã được xác minh" if approved else f"bị từ chối. Lý do: {reason}"

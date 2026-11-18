@@ -31,15 +31,37 @@ def run_migration() -> None:
                 "ALTER TABLE companies ADD COLUMN verification_status VARCHAR(24) NOT NULL DEFAULT 'chua_xac_minh', "
                 "ADD INDEX idx_companies_verif_status (verification_status)"
             ))
+        if "logo_status" not in comp_cols:
+            db.execute(text("ALTER TABLE companies ADD COLUMN logo_status VARCHAR(20) NOT NULL DEFAULT 'missing'"))
+        if "logo_uploaded_by" not in comp_cols:
+            db.execute(text("ALTER TABLE companies ADD COLUMN logo_uploaded_by INT NULL"))
+        if "logo_uploaded_at" not in comp_cols:
+            db.execute(text("ALTER TABLE companies ADD COLUMN logo_uploaded_at DATETIME NULL"))
 
         db.execute(text("ALTER TABLE jobs MODIFY COLUMN status VARCHAR(32) NOT NULL DEFAULT 'draft'"))
+        db.execute(text("ALTER TABLE jobs MODIFY COLUMN location_id INT NULL"))
+        db.execute(text("ALTER TABLE jobs MODIFY COLUMN company_id INT NULL"))
+        db.execute(text("ALTER TABLE jobs MODIFY COLUMN deadline DATE NULL"))
+
+        user_cols = {r[0] for r in db.execute(text("DESCRIBE users")).fetchall()}
+        if "locked_reason" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN locked_reason VARCHAR(500) NULL"))
+        if "token_version" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 1"))
+        if "is_verified" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.execute(text(
+            "ALTER TABLE users MODIFY COLUMN role "
+            "ENUM('candidate','employer','recruiter','admin','operator') "
+            "NOT NULL DEFAULT 'candidate'"
+        ))
 
         audit_cols = {r[0] for r in db.execute(text("DESCRIBE audit_logs")).fetchall()}
         if "reason" not in audit_cols:
             db.execute(text("ALTER TABLE audit_logs ADD COLUMN reason TEXT NULL"))
 
         db.commit()
-        print("[MIGRATION] Hoàn tất migrate_company_verification thành công.")
+        print("[MIGRATION] Hoan tat migrate_company_verification thanh cong.")
     finally:
         db.close()
 
