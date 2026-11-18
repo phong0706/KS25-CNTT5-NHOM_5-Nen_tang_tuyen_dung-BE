@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user, get_optional_user
 from app.db.session import get_db
+from app.models.application import Application
 from app.models.company import Company
 from app.models.job import (
     Job,
@@ -512,10 +513,10 @@ def get_public_job_detail(
             select(SavedJob.id).where(SavedJob.user_id == user.id, SavedJob.job_id == job_id)
         ) is not None
         applied = db.scalar(
-            select(JobApplication.id).where(
-                JobApplication.candidate_id == user.id,
-                JobApplication.job_id == job_id,
-                JobApplication.active_flag == 1,
+            select(Application.id).where(
+                Application.candidate_id == user.id,
+                Application.job_id == job_id,
+                Application.status.notin_(["withdrawn", "WITHDRAWN"]),
             )
         ) is not None
 
