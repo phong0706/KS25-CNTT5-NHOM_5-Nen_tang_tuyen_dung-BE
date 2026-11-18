@@ -4,6 +4,7 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
+from app.models.company_verification import CompanyVerification
 from app.models.job import Job, MetaCategory, MetaLevel, MetaLocation, SavedJob
 from app.models.user import User
 from app.schemas.company import (
@@ -51,13 +52,26 @@ def get_public_company_detail(db: Session, slug: str) -> PublicCompanyDetailOut:
     sim_skills = extract_top_skills_by_company(db, [r[0].id for r in sim_rows], 3)
     similar = [build_company_card(r[0], r.ind_slug, r.ind_name, r.loc_name, r, [s.name for s in sim_skills.get(r[0].id, [])]) for r in sim_rows]
 
+    verif_row = db.scalar(
+        select(CompanyVerification)
+        .where(CompanyVerification.company_id == c.id, CompanyVerification.status == "da_xac_minh")
+        .order_by(CompanyVerification.reviewed_at.desc(), CompanyVerification.id.desc())
+    )
+    verif_status = (
+        "da_xac_minh"
+        if (c.verification_status == "da_xac_minh" or c.is_verified)
+        else ("cho_duyet" if c.verification_status == "cho_duyet" else "chua_xac_minh")
+    )
+    verified_at = (verif_row.reviewed_at if verif_row and verif_row.reviewed_at else c.verified_at) if verif_status == "da_xac_minh" else None
+
     return PublicCompanyDetailOut(
         slug=c.slug or str(c.id), name=c.name, tagline=c.tagline, description=c.description,
         logo_url=safe_media(c.logo_url if c.logo_status != "removed" else None),
         cover_url=safe_media(c.cover_url),
         industry=CompanyIndustryOut(slug=ind_slug, name=ind_name) if ind_slug and ind_name else None,
         location=loc_name or c.address, address=c.address, size_range=c.size_range, founded_year=c.founded_year,
-        website=safe_site(c.website), is_verified=bool(c.is_verified), updated_at=c.updated_at,
+        website=safe_site(c.website), is_verified=(verif_status == "da_xac_minh"),
+        verification_status=verif_status, verified_at=verified_at, updated_at=c.updated_at,
         open_jobs=open_jobs, salary_range=sal_range, latest_job_at=agg_row.latest_job_at if agg_row else None,
         top_skills=skills_map.get(c.id, []), similar=similar,
     )

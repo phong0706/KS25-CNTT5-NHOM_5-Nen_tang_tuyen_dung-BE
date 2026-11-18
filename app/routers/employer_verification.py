@@ -19,6 +19,7 @@ from app.services.company_verification_service import (
     serialize_verification,
     submit_verification_request,
 )
+from app.services.employer_criteria_service import evaluate_employer_criteria
 
 router = APIRouter(prefix="/employer", tags=["Employer Company Verification"])
 
@@ -58,6 +59,31 @@ def get_my_company_verification(
     comp = _get_or_create_my_company(db, current_user)
     verif = get_latest_verification(db, comp.id)
     return serialize_verification(db, comp, verif)
+
+
+@router.get("/verification-criteria", summary="Xem danh sách tiêu chí xác thực của nhà tuyển dụng hiện tại")
+def get_my_verification_criteria(
+    current_user: User = Depends(_require_employer_role),
+    db: Session = Depends(get_db),
+):
+    comp = _get_or_create_my_company(db, current_user)
+    return evaluate_employer_criteria(db, comp)
+
+
+@router.get("/companies/{company_id}/verification-criteria", summary="Xem tiêu chí xác thực theo company_id (chỉ chủ sở hữu hoặc admin)")
+def get_company_verification_criteria(
+    company_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role not in ("employer", "recruiter", "admin", "operator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "Bạn không có quyền xem thông tin này."})
+    comp = db.get(Company, company_id)
+    if not comp:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Không tìm thấy công ty."})
+    if current_user.role in ("employer", "recruiter") and comp.employer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "FORBIDDEN", "message": "Bạn không có quyền xem tiêu chí xác thực của công ty khác."})
+    return evaluate_employer_criteria(db, comp)
 
 
 @router.get("/companies/{company_id}/verification", summary="Xem yêu cầu xác minh theo company_id (chỉ chủ sở hữu công ty)")
