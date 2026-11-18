@@ -8,7 +8,6 @@ from pathlib import Path
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse
 from PIL import Image
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -16,39 +15,25 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import get_current_user, role_required
 from app.db.session import get_db
-from app.models.application import Application, CV
 from app.models.audit_log import AuditLog
 from app.models.company import Company
 from app.models.job import Job
 from app.models.user import User
 
 router = APIRouter(prefix="/admin", tags=["Admin Companies & CVs Governance"])
-
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_LOGO_BYTES = 200 * 1024  # 200 KB
 MAX_LOGO_DIM = 512  # 512 px
 
 
 def _write_audit(
-    db: Session,
-    actor: User,
-    target_type: str,
-    target_id: int,
-    action: str,
-    old_val: str | None = None,
-    new_val: str | None = None,
-    target_label: str | None = None,
+    db: Session, actor: User, target_type: str, target_id: int, action: str,
+    old_val: str | None = None, new_val: str | None = None, target_label: str | None = None,
 ) -> AuditLog:
     entry = AuditLog(
-        actor_id=actor.id,
-        actor_name=actor.full_name or actor.email,
-        actor_role=actor.role,
-        target_type=target_type,
-        target_id=target_id,
-        target_label=target_label,
-        action=action,
-        old_value=old_val,
-        new_value=new_val,
+        actor_id=actor.id, actor_name=actor.full_name or actor.email, actor_role=actor.role,
+        target_type=target_type, target_id=target_id, target_label=target_label,
+        action=action, old_value=old_val, new_value=new_val,
     )
     db.add(entry)
     return entry
@@ -57,39 +42,31 @@ def _write_audit(
 def _full_logo_url(request: Request, rel_path: str | None) -> str | None:
     if not rel_path:
         return None
-    if rel_path.startswith("http://") or rel_path.startswith("https://"):
+    if rel_path.startswith(("http://", "https://")):
         return rel_path
     base = str(request.base_url).rstrip("/")
     return f"{base}{rel_path if rel_path.startswith('/') else '/' + rel_path}"
 
 
 def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: int = 0) -> dict:
-    uploader_name = None
-    if comp.logo_uploaded_by:
-        u = db.get(User, comp.logo_uploaded_by)
-        uploader_name = u.full_name if u else f"User #{comp.logo_uploaded_by}"
+    u = db.get(User, comp.logo_uploaded_by) if comp.logo_uploaded_by else None
+    uploader_name = (u.full_name if u else f"User #{comp.logo_uploaded_by}") if comp.logo_uploaded_by else None
     owner = db.get(User, comp.employer_id) if comp.employer_id else None
     raw_path = comp.logo_url or comp.logo
     l_status = comp.logo_status or ("active" if raw_path else "missing")
     if not raw_path and l_status == "active":
         l_status = "missing"
     return {
-        "id": comp.id,
-        "name": comp.name,
-        "slug": comp.slug,
+        "id": comp.id, "name": comp.name, "slug": comp.slug,
         "employer_id": comp.employer_id,
         "employer_name": owner.full_name if owner else "Chưa gán",
         "employer_email": owner.email if owner else "",
-        "tax_code": comp.tax_code,
-        "size": comp.size or comp.company_size,
-        "website": comp.website,
-        "address": comp.address,
+        "tax_code": comp.tax_code, "size": comp.size or comp.company_size,
+        "website": comp.website, "address": comp.address,
         "status": comp.status.value if hasattr(comp.status, "value") else str(comp.status),
         "open_jobs_count": int(open_jobs or 0),
-        "logo_path": raw_path,
-        "logo_full_url": _full_logo_url(request, raw_path),
-        "logo_status": l_status,
-        "logo_uploaded_by": comp.logo_uploaded_by,
+        "logo_path": raw_path, "logo_full_url": _full_logo_url(request, raw_path),
+        "logo_status": l_status, "logo_uploaded_by": comp.logo_uploaded_by,
         "logo_uploaded_by_name": uploader_name,
         "logo_uploaded_at": comp.logo_uploaded_at.isoformat() if comp.logo_uploaded_at else None,
         "updated_at": comp.updated_at.isoformat() if comp.updated_at else None,
@@ -97,33 +74,18 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
 
 
 def _check_company_access(user: User, comp: Company):
-    if user.role in ("admin", "operator"):
+    if user.role in ("admin", "operator") or (user.role in ("employer", "recruiter") and comp.employer_id == user.id):
         return
-    if user.role in ("employer", "recruiter") and comp.employer_id == user.id:
-        return
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Bạn không có quyền truy cập hoặc chỉnh sửa thông tin công ty của người khác.",
-    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền truy cập hoặc chỉnh sửa thông tin công ty của người khác.")
 
 
 @router.get("/companies", summary="Danh sách công ty cho khu quản trị")
 def list_admin_companies(
-    request: Request,
-    q: str = Query("", max_length=100),
-    logo_status: str = Query("all"),
-    current_user: User = Depends(role_required("admin", "operator")),
-    db: Session = Depends(get_db),
+    request: Request, q: str = Query("", max_length=100), logo_status: str = Query("all"),
+    current_user: User = Depends(role_required("admin", "operator")), db: Session = Depends(get_db),
 ):
-    job_sub = (
-        select(Job.company_id, func.count(Job.id).label("cnt"))
-        .where(Job.status == "published")
-        .group_by(Job.company_id)
-        .subquery()
-    )
-    stmt = select(Company, func.coalesce(job_sub.c.cnt, 0).label("open_jobs")).outerjoin(
-        job_sub, Company.id == job_sub.c.company_id
-    )
+    job_sub = select(Job.company_id, func.count(Job.id).label("cnt")).where(Job.status == "published").group_by(Job.company_id).subquery()
+    stmt = select(Company, func.coalesce(job_sub.c.cnt, 0).label("open_jobs")).outerjoin(job_sub, Company.id == job_sub.c.company_id)
     kw = q.strip()
     if kw:
         stmt = stmt.where(or_(Company.name.ilike(f"%{kw}%"), Company.slug.ilike(f"%{kw}%")))
@@ -136,10 +98,7 @@ def list_admin_companies(
 
 @router.get("/companies/{company_id}", summary="Chi tiết công ty kèm thông tin logo và quyền sở hữu")
 def get_admin_company_detail(
-    company_id: int,
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    company_id: int, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)
     if not comp:

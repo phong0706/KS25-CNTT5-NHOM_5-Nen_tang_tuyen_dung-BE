@@ -26,10 +26,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Audit & CV Governance"])
 
 @router.post("/companies/{company_id}/logo/remove", summary="Gỡ logo công ty (chỉ đổi trạng thái, không xóa file vật lý)")
 def remove_company_logo_admin(
-    company_id: int,
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    company_id: int, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)
     if not comp:
@@ -39,16 +36,7 @@ def remove_company_logo_admin(
     old_status = comp.logo_status or "active"
     comp.logo_status = "removed"
     full_url = _full_logo_url(request, comp.logo_url or comp.logo)
-    _write_audit(
-        db,
-        current_user,
-        "company_logo",
-        comp.id,
-        "remove_logo",
-        f"{old_status} ({full_url or 'N/A'})",
-        f"removed ({full_url or 'N/A'})",
-        comp.name,
-    )
+    _write_audit(db, current_user, "company_logo", comp.id, "remove_logo", f"{old_status} ({full_url or 'N/A'})", f"removed ({full_url or 'N/A'})", comp.name)
     db.commit()
     db.refresh(comp)
     open_jobs = db.scalar(select(func.count(Job.id)).where(and_(Job.company_id == comp.id, Job.status == "published"))) or 0
@@ -110,18 +98,12 @@ def list_admin_candidate_cvs(
     rows = db.execute(stmt.order_by(Application.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
 
     items = []
-    for app_row, c_name, c_email, j_title, comp_name, cv_orig, cv_stored, cv_size in rows:
+    for app_row, c_name, c_email, j_title, comp_name, cv_orig, _cv_stored, cv_size in rows:
         has_cv = bool(app_row.cv_id)
         items.append({
-            "application_id": app_row.id,
-            "cv_id": app_row.cv_id,
-            "has_cv": has_cv,
-            "candidate_id": app_row.candidate_id,
-            "candidate_name": c_name or "Ứng viên",
-            "candidate_email": c_email or "",
-            "job_id": app_row.job_id,
-            "job_title": j_title or "Tin tuyển dụng",
-            "company_name": comp_name or "Doanh nghiệp",
+            "application_id": app_row.id, "cv_id": app_row.cv_id, "has_cv": has_cv,
+            "candidate_id": app_row.candidate_id, "candidate_name": c_name or "Ứng viên", "candidate_email": c_email or "",
+            "job_id": app_row.job_id, "job_title": j_title or "Tin tuyển dụng", "company_name": comp_name or "Doanh nghiệp",
             "cv_name": (app_row.cv_name_snapshot or cv_orig or "CV.pdf") if has_cv else None,
             "size_bytes": cv_size or 0,
             "submitted_at": app_row.created_at.isoformat() if app_row.created_at else None,
@@ -198,16 +180,9 @@ def list_admin_audit_logs(
     rows = db.scalars(stmt.order_by(AuditLog.id.desc()).limit(limit)).all()
     items = [
         {
-            "id": r.id,
-            "actor_id": r.actor_id,
-            "actor_name": r.actor_name,
-            "actor_role": r.actor_role,
-            "target_type": r.target_type,
-            "target_id": r.target_id,
-            "target_label": r.target_label,
-            "action": r.action,
-            "old_value": r.old_value,
-            "new_value": r.new_value,
+            "id": r.id, "actor_id": r.actor_id, "actor_name": r.actor_name, "actor_role": r.actor_role,
+            "target_type": r.target_type, "target_id": r.target_id, "target_label": r.target_label,
+            "action": r.action, "old_value": r.old_value, "new_value": r.new_value,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows
