@@ -1,7 +1,7 @@
 """Các hành động Từ chối, Thu hồi, Đổi MST và Cổng kiểm tra quyền đăng tin (COMPANY_NOT_VERIFIED).
 Giới hạn: <= 200 dòng.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -58,7 +58,7 @@ def reject_verification_request(
 
     res = db.execute(
         update(CompanyVerification).where(*conds).values(
-            status="tu_choi", reviewed_by=actor.id, reviewed_at=datetime.utcnow(),
+            status="tu_choi", reviewed_by=actor.id, reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             rejection_reason=clean_reason, idempotency_key=idempotency_key, version=CompanyVerification.version + 1,
         )
     )
@@ -109,7 +109,7 @@ def revoke_company_verification(
             conds.append(CompanyVerification.version == expected_version)
         res = db.execute(
             update(CompanyVerification).where(*conds).values(
-                status="thu_hoi", reviewed_by=actor.id, reviewed_at=datetime.utcnow(),
+                status="thu_hoi", reviewed_by=actor.id, reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 rejection_reason=clean_reason, idempotency_key=idempotency_key, version=CompanyVerification.version + 1,
             )
         )

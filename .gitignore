@@ -15,6 +15,7 @@ env/
 .vscode/
 .idea/
 
-# File upload (ảnh logo, ảnh bìa công ty)
+# File upload & kho lưu trữ riêng tư (CV, giấy phép kinh doanh)
 uploads/
+storage/
 
