@@ -1,6 +1,7 @@
 """Router công khai cho Trang chủ & Trang tìm việc (tìm kiếm, lọc facets, công ty nổi bật, thống kê)."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import math
+import statistics
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from sqlalchemy import and_, func, or_, select, text
@@ -8,12 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user, get_optional_user
 from app.db.session import get_db
+from app.models.application import Application
 from app.models.company import Company
 from app.models.job import (
     Job,
     MetaCategory,
     MetaLevel,
     MetaLocation,
+    MetaSkill,
     MetaWorkType,
     SavedJob,
 )
@@ -157,7 +160,7 @@ def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_
     stmt = (
         select(model_cls.slug, model_cls.name, func.coalesce(subq.c.cnt, 0).label("cnt"))
         .outerjoin(subq, model_cls.id == subq.c.meta_id)
-        .order_by(model_cls.sort_order.asc(), model_cls.id.asc())
+        .order_by(text("cnt DESC"), model_cls.sort_order.asc(), model_cls.id.asc())
     )
     return [FacetItemOut(value=r.slug, label=r.name, count=int(r.cnt)) for r in db.execute(stmt).all()]
 
@@ -413,7 +416,8 @@ def list_featured_companies(
 @router.get("/stats/home", response_model=HomeStatsOut, summary="Thống kê thật cho trang chủ")
 def get_home_stats(db: Session = Depends(get_db)):
     total_published = int(db.scalar(select(func.count(Job.id)).where(Job.status == "published")) or 0)
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    now_utc = datetime.now(timezone.utc)
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     today_new = int(
         db.scalar(
             select(func.count(Job.id)).where(
@@ -422,13 +426,34 @@ def get_home_stats(db: Session = Depends(get_db)):
             )
         ) or 0
     )
+    seven_days_ago = now_utc - timedelta(days=7)
+    weekly_new = int(
+        db.scalar(
+            select(func.count(Job.id)).where(
+                Job.status == "published",
+                func.coalesce(Job.published_at, Job.created_at) >= seven_days_ago,
+            )
+        ) or 0
+    )
     total_companies = int(
         db.scalar(select(func.count(Company.id)).where(Company.is_draft == False)) or 0  # noqa: E712
     )
+    salary_rows = db.execute(select(Job.salary_min, Job.salary_max).where(Job.status == "published")).all()
+    mids = [
+        (s_min + s_max) / 2 if (s_min and s_max) else (s_min or s_max)
+        for s_min, s_max in salary_rows
+        if (s_min or s_max)
+    ]
+    median_sal = int(statistics.median(mids)) if mids else 0
+    total_skills = int(db.scalar(select(func.count(MetaSkill.id))) or 0)
+
     return HomeStatsOut(
         total_published_jobs=total_published,
         today_new_jobs=today_new,
         total_companies=total_companies,
+        weekly_new_jobs=weekly_new,
+        salary_median=median_sal,
+        total_skills=total_skills,
     )
 
 
@@ -488,10 +513,10 @@ def get_public_job_detail(
             select(SavedJob.id).where(SavedJob.user_id == user.id, SavedJob.job_id == job_id)
         ) is not None
         applied = db.scalar(
-            select(JobApplication.id).where(
-                JobApplication.candidate_id == user.id,
-                JobApplication.job_id == job_id,
-                JobApplication.active_flag == 1,
+            select(Application.id).where(
+                Application.candidate_id == user.id,
+                Application.job_id == job_id,
+                Application.status.notin_(["withdrawn", "WITHDRAWN"]),
             )
         ) is not None
 

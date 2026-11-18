@@ -14,10 +14,10 @@ from app.core.permissions import is_owner_or_admin, require_owner
 from app.core.security import get_current_user, get_optional_user, role_required
 from app.crud import candidate_profile as profile_crud
 from app.db.session import get_db
+from app.models.candidate import CandidateProfile
 from app.models.candidate_profile import (
     CandidateEducation,
     CandidateExperience,
-    CandidateProfile,
 )
 from app.models.user import User
 from app.schemas.candidate_profile import (

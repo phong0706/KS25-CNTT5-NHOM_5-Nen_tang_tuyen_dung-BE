@@ -9,18 +9,18 @@ from app.models.catalog import Industry, Location, Skill  # noqa: F401
 
 # 2. Công ty (FK → users)
 from app.models.company import Company, CompanyStatus  # noqa: F401
+from app.models.company_verification import CompanyVerification  # noqa: F401
 
 # 3. Hồ sơ ứng viên
+from app.models.candidate import (  # noqa: F401
+    CandidateProfile,
+    CandidateSkill,
+    Education,
+    Experience,
+)
 from app.models.candidate_profile import (  # noqa: F401
     CandidateEducation,
     CandidateExperience,
-    CandidateProfile,
-)
-from app.models.candidate import (  # noqa: F401
-    CandidateSkill,
-    Cv,
-    Education,
-    Experience,
 )
 
 # 4. Việc làm & kỹ năng công việc
@@ -55,4 +55,12 @@ from app.models.interview import Interview  # noqa: F401
 from app.models.report import Report, ReportStatus  # noqa: F401
 from app.models.notification import Notification  # noqa: F401  ← sau User vì có FK user_id → users.id
 from app.models.password_reset import PasswordResetToken  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.career_path import (  # noqa: F401
+    CareerRoleSkillWeight,
+    CareerRoleStat,
+    CareerRoleTransition,
+)
+
+
 

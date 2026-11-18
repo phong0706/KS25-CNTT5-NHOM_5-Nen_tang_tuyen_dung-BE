@@ -42,6 +42,7 @@ from app.schemas.job import (
     SavedJobDetailOut,
 )
 from app.schemas.saved_job import SavedJobCreate, SavedJobOut
+from app.services.company_verification_actions import enforce_company_job_rule
 
 router = APIRouter(tags=["Jobs"])
 
@@ -303,6 +304,9 @@ def create_job(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Chức năng này chỉ dành cho nhà tuyển dụng",
         )
+    if current_user.role == "employer":
+        req_status = getattr(data, "status", "PENDING") or "PENDING"
+        enforce_company_job_rule(db, current_user.id, str(req_status), is_creating=True)
     job = job_crud.create_job(
         db, current_user.id, data, is_admin=current_user.role == "admin"
     )
@@ -334,6 +338,8 @@ def update_job(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Chỉ nhà tuyển dụng sở hữu tin mới được chỉnh sửa",
         )
+    existing = db.get(Job, job_id)
+    enforce_company_job_rule(db, current_user.id, "draft", is_creating=False, existing_job=existing, new_deadline=getattr(data, "deadline", None))
     job = job_crud.update_job(db, job_id, current_user.id, data)
     return {
         "statusCode": 200,
@@ -363,16 +369,19 @@ def update_job_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Chức năng này chỉ dành cho nhà tuyển dụng hoặc quản trị viên",
         )
-    if current_user.role == "employer" and data.status not in {
-        "PENDING",
-        "OPEN",
-        "HIDDEN",
-        "CLOSED",
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Trạng thái này chỉ quản trị viên được thiết lập",
-        )
+    if current_user.role == "employer":
+        if data.status in {"PENDING", "OPEN", "published", "pending"}:
+            enforce_company_job_rule(db, current_user.id, data.status, is_creating=False)
+        if data.status not in {
+            "PENDING",
+            "OPEN",
+            "HIDDEN",
+            "CLOSED",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Trạng thái này chỉ quản trị viên được thiết lập",
+            )
     job = job_crud.change_job_status(
         db,
         job_id,

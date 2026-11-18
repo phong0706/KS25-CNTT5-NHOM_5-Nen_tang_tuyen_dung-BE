@@ -195,11 +195,10 @@ def delete_cv(
 @router.get("/candidate/cvs/{cv_id}/file", summary="Xem / tải file CV")
 def get_cv_file(
     cv_id: int,
-    token: str | None = Query(None),
     auth_header=Depends(_bearer),
     db: Session = Depends(get_db),
 ):
-    raw_token = auth_header.credentials if auth_header else token
+    raw_token = auth_header.credentials if auth_header else None
     if not raw_token:
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để xem file.")
     try:

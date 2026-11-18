@@ -3,6 +3,7 @@ from app.services.salary_stats import (
     calculate_percentile,
     filter_iqr_outliers,
     compute_salary_insights,
+    compute_skills_benchmarks,
 )
 
 
@@ -68,4 +69,27 @@ def test_compute_salary_insights_sufficient_5_samples():
     assert res["max"] == 40000000
     assert res["p25"] == 20000000
     assert res["p75"] == 30000000
+
+
+def test_compute_skills_benchmarks():
+    pairs = [
+        ("Python", 30_000_000), ("Python", 40_000_000), ("Python", 35_000_000), ("Python", 50_000_000), ("Python", 45_000_000),
+        ("React", 20_000_000), ("React", 25_000_000), ("React", 30_000_000), ("React", 22_000_000), ("React", 28_000_000),
+        ("Go", 60_000_000), ("Go", 55_000_000),  # Chỉ 2 tin -> bị ẩn
+    ]
+    benchmarks = compute_skills_benchmarks(pairs, min_samples=5, limit=6)
+    assert len(benchmarks) == 2
+    assert benchmarks[0]["skill"] == "Python"
+    assert benchmarks[0]["median_salary"] == 40_000_000
+    assert benchmarks[0]["sample_count"] == 5
+    assert benchmarks[0]["display_salary"] == "40,0 tr/tháng"
+
+    assert benchmarks[1]["skill"] == "React"
+    assert benchmarks[1]["median_salary"] == 25_000_000
+    assert benchmarks[1]["sample_count"] == 5
+    assert benchmarks[1]["display_salary"] == "25,0 tr/tháng"
+
+    # Go bị ẩn vì sample_count = 2 < 5
+    assert not any(b["skill"] == "Go" for b in benchmarks)
+
 

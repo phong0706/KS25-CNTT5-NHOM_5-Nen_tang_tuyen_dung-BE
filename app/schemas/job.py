@@ -257,6 +257,9 @@ class HomeStatsOut(BaseModel):
     total_published_jobs: int
     today_new_jobs: int
     total_companies: int
+    weekly_new_jobs: int = 0
+    salary_median: int = 0
+    total_skills: int = 0
 
 
 # ===========================================================================

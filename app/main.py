@@ -18,7 +18,10 @@ from app.core.config import settings
 from app.db.session import Base, engine
 from app.routers import (
     admin_applications,
+    admin_audit_and_cvs,
+    admin_companies_cvs,
     admin_interview,
+    admin_verifications,
     applications,
     auth,
     candidate_applications,
@@ -29,12 +32,14 @@ from app.routers import (
     candidate_profile,
     candidate_recommended,
     candidate_saved_jobs,
+    career_path,
     companies,
     company,
     cv,
     employer_applications,
     employer_interviews,
     employer_jobs,
+    employer_verification,
     health,
     industries,
     interview,
@@ -46,12 +51,12 @@ from app.routers import (
     nav_meta,
     notifications,
     public_jobs,
+    reports,
     salary_insights,
     search_insights,
     skills,
     tools,
     users,
-    reports,
 )
 
 # Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
@@ -75,6 +80,7 @@ def _log(message: str) -> None:
 upload_dir_path = Path(settings.UPLOAD_DIR)
 upload_dir_path.mkdir(parents=True, exist_ok=True)
 (upload_dir_path / "avatars").mkdir(parents=True, exist_ok=True)
+(upload_dir_path / "logos").mkdir(parents=True, exist_ok=True)
 
 cv_upload_dir_str = getattr(settings, "CV_UPLOAD_DIR", None)
 if cv_upload_dir_str:
@@ -101,11 +107,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
+_cors_origins = settings.cors_origin_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=_cors_origins,
+    allow_credentials=("*" not in _cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 # Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py & avatars)
@@ -129,6 +138,7 @@ app.include_router(skills.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
 app.include_router(employer_interviews.router, prefix="/api")
+app.include_router(employer_verification.router, prefix="/api")
 
 # search_insights PHẢI được đăng ký TRƯỚC public_jobs và jobs:
 # public_jobs / jobs có route "/jobs/{job_id}" (job_id: int) — nếu đăng ký trước, FastAPI sẽ
@@ -148,6 +158,9 @@ app.include_router(tools.router, prefix="/api")
 app.include_router(interview.router, prefix="/api")
 app.include_router(admin_interview.router, prefix="/api")
 app.include_router(admin_applications.router, prefix="/api")
+app.include_router(admin_companies_cvs.router, prefix="/api")
+app.include_router(admin_audit_and_cvs.router, prefix="/api")
+app.include_router(admin_verifications.router, prefix="/api")
 app.include_router(candidate_cover_letters.router, prefix="/api")
 app.include_router(candidate_cv_documents.router, prefix="/api")
 app.include_router(matching.router)
@@ -155,7 +168,9 @@ app.include_router(matching.router)
 app.include_router(salary_insights.router, prefix="/api")
 # Thông báo dùng chung (chuông thông báo trên header FE)
 app.include_router(notifications.router, prefix="/api")
-# Bao cao vi pham
+app.include_router(career_path.router, prefix="/api")
+app.include_router(career_path.router)
+# Báo cáo vi phạm
 app.include_router(reports.router, prefix="/api")
 
 

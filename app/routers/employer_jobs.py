@@ -26,6 +26,7 @@ from app.schemas.job import (
     JobStatusPatchIn,
     JobTabOut,
 )
+from app.services.company_verification_actions import enforce_company_job_rule
 from app.services.notification import notify_job_status_changed
 
 router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
@@ -35,6 +36,7 @@ PAGE_SIZE = 10
 STATUS_META: dict[str, tuple[str, str]] = {
     "draft": ("Nháp", "neutral"),
     "pending": ("Chờ duyệt", "warning"),
+    "reverify_pending": ("Chờ xác minh lại", "warning"),
     "published": ("Đang tuyển", "success"),
     "hidden": ("Đang ẩn", "muted"),
     "closed": ("Đã đóng", "danger"),
@@ -54,6 +56,7 @@ ACTION_DEFS: dict[str, tuple[str, str]] = {
 ALLOWED_ACTIONS_BY_STATUS: dict[str, list[str]] = {
     "draft": ["edit", "submit", "duplicate", "delete"],
     "pending": ["edit", "withdraw", "duplicate"],
+    "reverify_pending": ["edit", "close"],
     "published": ["edit", "hide", "close", "duplicate"],
     "hidden": ["edit", "reopen", "close", "duplicate"],
     "closed": ["edit", "reopen", "duplicate", "delete"],
@@ -63,6 +66,7 @@ TAB_DEFS: list[tuple[str, str]] = [
     ("all", "Tất cả"),
     ("draft", "Nháp"),
     ("pending", "Chờ duyệt"),
+    ("reverify_pending", "Chờ xác minh lại"),
     ("published", "Đang tuyển"),
     ("closed", "Đã đóng"),
 ]
@@ -100,6 +104,7 @@ def list_employer_jobs(
         "all": 0,
         "draft": 0,
         "pending": 0,
+        "reverify_pending": 0,
         "published": 0,
         "hidden": 0,
         "closed": 0,
@@ -257,6 +262,8 @@ def patch_job_status(
 
     job = _get_owned_job(db, job_id, current_user.id)
     allowed_from, next_status, undo_action, message = TRANSITIONS[action]
+    if action in ("submit", "reopen"):
+        enforce_company_job_rule(db, current_user.id, next_status, is_creating=False, existing_job=job)
     if job.status not in allowed_from:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
@@ -419,8 +426,19 @@ def create_employer_job(
     current_user: User = Depends(role_required("employer")),
 ):
     _validate_job_payload(body)
-    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-    company_verified = company is not None and company.status == CompanyStatus.VERIFIED
+    company = enforce_company_job_rule(db, current_user.id, body.status, is_creating=True)
+    if company is None:
+        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+    company_verified = (
+        company is not None
+        and company.status == CompanyStatus.VERIFIED
+        and company.verification_status == "da_xac_minh"
+    )
+    if not company_verified and body.status != "draft":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
+        )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -457,7 +475,16 @@ def update_employer_job(
 ):
     _validate_job_payload(body)
     job = _get_owned_job(db, job_id, current_user.id)
-    company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+    company = enforce_company_job_rule(
+        db, current_user.id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline
+    )
+    if company is None:
+        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
+    if (company is None or company.status != CompanyStatus.VERIFIED) and body.status != "draft":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
+        )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
@@ -475,7 +502,7 @@ def update_employer_job(
     job.is_salary_negotiable = body.is_salary_negotiable
     job.benefits = clean_benefits
     # Cho phép nâng từ draft lên pending; nếu tin đang published/hidden/closed giữ trạng thái hiện tại trừ khi sửa draft
-    if company is None or company.status != CompanyStatus.VERIFIED:
+    if (company is None or company.status != CompanyStatus.VERIFIED or company.verification_status != "da_xac_minh") and job.status != "reverify_pending":
         job.status = "draft"
         job.published_at = None
     elif job.status == "draft" and body.status in ("draft", "pending"):

@@ -1,11 +1,10 @@
-"""Models cho hồ sơ ứng viên: profile, kinh nghiệm làm việc và học vấn."""
+"""Models phụ trợ hồ sơ ứng viên: kinh nghiệm làm việc và học vấn theo user_id."""
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
-from app.models.candidate import CandidateProfile  # noqa: F401
 
 
 class CandidateExperience(Base):

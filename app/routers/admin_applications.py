@@ -1,13 +1,15 @@
 """Router Giám sát ứng tuyển & Trao đổi Ứng viên - NTD cho Admin (/api/admin/applications).
 Quy tắc: Quyền Admin (401/403/404), < 200 dòng.
 """
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
 from app.db.session import get_db
-from app.models.application import Application, ApplicationStatusHistory, MetaApplicationStatus
+from app.models.application import Application, ApplicationStatusHistory, CV, MetaApplicationStatus
 from app.models.company import Company
 from app.models.job import Job
 from app.models.user import User
@@ -156,3 +158,25 @@ def get_admin_application_detail(
         status=app_row.status, status_label=meta.name if meta else app_row.status, status_tone=meta.tone if meta else "neutral",
         created_at=app_row.created_at, updated_at=app_row.updated_at, interview=iv, history=history,
     )
+
+
+@router.get("/{app_id}/cv", summary="Xem / Tải file CV của hồ sơ ứng tuyển dành cho Admin")
+def get_admin_application_cv(
+    app_id: int,
+    current_user=Depends(role_required("admin")),
+    db: Session = Depends(get_db),
+):
+    app_row = db.scalar(select(Application).where(Application.id == app_id))
+    if not app_row or not app_row.cv_id:
+        raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không có CV.")
+    cv = db.scalar(select(CV).where(CV.id == app_row.cv_id))
+    if not cv:
+        raise HTTPException(status_code=404, detail="Bản ghi CV không tồn tại.")
+    cv_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "cvs"
+    fp = cv_dir / cv.stored_name
+    if not fp.is_file():
+        raise HTTPException(status_code=404, detail="Tệp CV không tồn tại trên máy chủ.")
+    ext = Path(cv.original_name or cv.stored_name).suffix.lower()
+    mime = "application/pdf" if ext == ".pdf" else cv.mime_type or "application/octet-stream"
+    return FileResponse(path=str(fp), media_type=mime, filename=cv.original_name, content_disposition_type="inline")
+

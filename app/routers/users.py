@@ -27,7 +27,7 @@ from app.schemas.user import UserListOut, UserLockIn, UserOut
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-VALID_ROLES = {"candidate", "employer", "admin"}
+VALID_ROLES = {"candidate", "employer", "operator", "admin"}
 
 
 @router.get(

@@ -10,16 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.job import Job, MetaCategory, MetaLocation, MetaLevel
-from app.services.salary_stats import compute_salary_insights
+from app.services.salary_stats import compute_salary_insights, compute_skills_benchmarks
 
 router = APIRouter(prefix="/salary", tags=["Salary Insights"])
 
-# Tỷ giá USD -> VND dùng để chuẩn hoá mức lương.
-USD_EXCHANGE_RATE = 25400
-
-# Ngưỡng nhận diện mức lương khai báo bằng USD.
-# Mức lương IT bằng VND luôn >= 1.000.000; con số <= ngưỡng này chắc chắn là USD.
-USD_THRESHOLD = 1_000_000
+# Tỷ giá USD -> VND & ngưỡng USD (<= 1.000.000 chắc chắn là USD)
+USD_EXCHANGE_RATE, USD_THRESHOLD = 25400, 1_000_000
 
 
 class RelaxedSuggestion(BaseModel):
@@ -34,6 +30,14 @@ class LevelExpBenchmark(BaseModel):
     exp_range: str
     median_salary: int
     sample_count: int
+
+
+class SkillBenchmarkOut(BaseModel):
+    skill: str
+    median_salary: int
+    sample_count: int
+    display_salary: str
+
 
 
 class SalaryInsightsOut(BaseModel):
@@ -59,21 +63,11 @@ class SalaryInsightsOut(BaseModel):
 
 
 def _normalize_val(val: Optional[float]) -> Optional[float]:
-    """Chuẩn hoá mức lương về VNĐ.
-
-    Bản cũ dùng ngưỡng 10.000 nên mọi mức lương VND <= 10.000 bị nhân nhầm
-    lên thành USD. Ngưỡng mới 1.000.000 an toàn cho mức lương IT (tối thiểu
-    khoảng 3.000.000 VND/tháng) trong khi vẫn bắt được các mức USD (thường
-    500 - 5.000 USD).
-    """
-    if not val:
-        return None
+    """Chuẩn hoá mức lương về VNĐ (ngưỡng 1.000.000 VND nhận diện USD)."""
+    if not val: return None
     v = float(val)
-    if v <= 0:
-        return None
-    if v <= USD_THRESHOLD:  # Định dạng USD
-        return v * USD_EXCHANGE_RATE
-    return v
+    if v <= 0: return None
+    return v * USD_EXCHANGE_RATE if v <= USD_THRESHOLD else v
 
 
 def _fetch_salaries(db: Session, cat_slug: Optional[str] = None, lvl_slug: Optional[str] = None, loc_slug: Optional[str] = None):
@@ -164,3 +158,29 @@ def get_salary_insights(
         outliers_removed=stats["outliers_removed"], is_sufficient=stats["is_sufficient"],
         updated_at=up_date_str, currency_normalized=True, suggestions=suggestions, level_benchmarks=benchmarks,
     )
+
+
+@router.get("/skills-benchmark", response_model=List[SkillBenchmarkOut], summary="Lương trung vị theo kỹ năng")
+def get_skills_benchmark(
+    response: Response,
+    min_samples: int = Query(5, ge=1),
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "public, max-age=120"
+    stmt = select(Job.skills, Job.salary_min, Job.salary_max).where(
+        Job.status == "published", Job.is_salary_negotiable == False, (Job.salary_min.is_not(None) | Job.salary_max.is_not(None))
+    )
+    rows = db.execute(stmt).all()
+    pairs = []
+    for r in rows:
+        min_v = _normalize_val(r.salary_min)
+        max_v = _normalize_val(r.salary_max)
+        sal = (min_v + max_v) / 2.0 if (min_v and max_v) else (min_v or max_v)
+        if sal and r.skills:
+            sk_list = r.skills if isinstance(r.skills, list) else []
+            for s in sk_list:
+                name = s.get("name", "") if isinstance(s, dict) else str(s)
+                if name: pairs.append((name, sal))
+    return compute_skills_benchmarks(pairs, min_samples=min_samples, limit=limit)
+

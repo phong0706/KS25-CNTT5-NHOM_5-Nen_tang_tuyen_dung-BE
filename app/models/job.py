@@ -116,7 +116,7 @@ class Job(Base):
     is_salary_negotiable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     benefits: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     views_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

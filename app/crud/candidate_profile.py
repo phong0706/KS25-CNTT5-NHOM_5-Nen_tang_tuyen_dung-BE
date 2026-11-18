@@ -31,7 +31,7 @@ def get_profile_by_user_id(db: Session, user_id: int) -> CandidateProfile | None
             joinedload(CandidateProfile.cvs),
         )
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return db.execute(stmt).unique().scalar_one_or_none()
 
 
 def get_profile_by_id(db: Session, profile_id: int) -> CandidateProfile | None:
@@ -46,7 +46,7 @@ def get_profile_by_id(db: Session, profile_id: int) -> CandidateProfile | None:
             joinedload(CandidateProfile.cvs),
         )
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return db.execute(stmt).unique().scalar_one_or_none()
 
 
 def create_profile(db: Session, data: CandidateProfileCreate) -> CandidateProfile:
