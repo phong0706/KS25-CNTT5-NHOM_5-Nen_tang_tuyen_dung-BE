@@ -40,6 +40,36 @@ def slugify_skill(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", norm).strip("-") or "skill"
 
 
+def slugify_company(name: str) -> str:
+    """Tạo slug chuẩn cho công ty: bỏ dấu, đ->d, chữ thường, gạch ngang, không phải số thuần."""
+    norm = normalize_search_text(name or "")
+    slug = re.sub(r"[^a-z0-9]+", "-", norm).strip("-")
+    if not slug:
+        slug = "company"
+    elif slug.isdigit() or not any(c.isalpha() for c in slug):
+        slug = f"co-{slug}"
+    return slug
+
+
+def generate_unique_company_slug(db, name: str, current_company_id: int | None = None) -> str:
+    """Tự động sinh slug duy nhất trong DB, trùng thì thêm hậu tố -2, -3..."""
+    from sqlalchemy import select
+    from app.models.company import Company
+
+    base_slug = slugify_company(name)
+    slug = base_slug
+    counter = 2
+    while True:
+        stmt = select(Company.id).where(Company.slug == slug)
+        if current_company_id is not None:
+            stmt = stmt.where(Company.id != current_company_id)
+        existing = db.scalar(stmt)
+        if not existing:
+            return slug
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+
 def validate_company_website(url: str | None) -> str | None:
     """Chỉ chấp nhận http:// hoặc https:// có hostname; từ chối javascript:, data:, file:."""
     if url is None or not str(url).strip():

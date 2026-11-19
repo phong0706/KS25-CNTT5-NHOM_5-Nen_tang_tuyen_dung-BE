@@ -8,12 +8,15 @@ from app.models.company import Company, CompanyStatus
 from app.models.job import Job
 from app.schemas.company_schema import CompanyProfileUpdate
 from app.services.notification import NotificationType, create_notification
+from app.services.public_company_rules import generate_unique_company_slug
 
 
 def create_draft_company(db: Session, *, name: str, employer_id: int) -> Company:
     """Tạo công ty nháp (is_draft=True) khi employer đăng ký."""
+    slug = generate_unique_company_slug(db, name)
     company = Company(
         name=name,
+        slug=slug,
         employer_id=employer_id,
         owner_id=employer_id,
         is_draft=True,
@@ -38,6 +41,8 @@ def update_company(db: Session, company: Company, data: CompanyProfileUpdate) ->
     )
     for field, value in changes.items():
         setattr(company, field, value)
+    if ("name" in changes and changes["name"]) or not company.slug:
+        company.slug = generate_unique_company_slug(db, company.name, current_company_id=company.id)
     if identity_changed:
         if company.status == CompanyStatus.VERIFIED:
             company.status = CompanyStatus.PENDING
