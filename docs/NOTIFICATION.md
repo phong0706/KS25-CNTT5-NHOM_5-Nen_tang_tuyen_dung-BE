@@ -234,37 +234,17 @@ hồ sơ không tồn tại. Nếu gọi SAU commit → thông báo có thể t�
 
 ### 5.2. NTD đổi trạng thái hồ sơ → ứng viên nhận thông báo
 
-**Endpoint:** `PATCH /api/employer/applications/{app_id}/status` → `app/routers/employer_applications.py`
+Nhà tuyển dụng dùng `GET /api/employer/applications?job_id={job_id}&status=REVIEWING` để lọc hồ sơ theo tin và trạng thái. Cả hai API kiểm tra quyền qua công ty của tin tuyển dụng. Tin hoặc hồ sơ ngoài phạm vi công ty trả về `404`.
 
+Gửi `PATCH /api/employer/applications/{app_id}/status` với trạng thái mới và ghi chú tối đa 500 ký tự.
+
+```json
+{ "status": "REVIEWING", "note": "CV phù hợp, mời xem xét" }
 ```
-NTD gửi PATCH /api/employer/applications/{app_id}/status
-body: { "status": "screening", "note": "CV phù hợp, mời xem xét" }
-        │
-        ├─ 1. SELECT Application JOIN Job WHERE Job.employer_id = current_user.id
-        │      → không tìm thấy → 404
-        ├─ 2. Kiểm tra `body.status` có trong meta_application_statuses không → 422
-        ├─ 3. UPDATE Application.status, updated_at
-        ├─ 4. INSERT ApplicationStatusHistory (ghi timeline)
-        │
-        ├─ 5. ★ GỌI notify_application_status_changed(...)   ← TRƯỚC db.commit()
-        │        │
-        │        ├─ user_id   = app.candidate_id    ← NGƯỜI NHẬN (ứng viên)
-        │        ├─ actor_id  = current_user.id     ← NGƯỜI GỬI (NTD)
-        │        ├─ type      = application_status_changed
-        │        ├─ title     = "Hồ sơ của bạn đã được cập nhật"
-        │        ├─ message   = "Hồ sơ ứng tuyển vị trí {tên tin} đã chuyển sang
-        │        │              trạng thái '{nhãn trạng thái}'." + (ghi chú nếu có)
-        │        ├─ link      = "/candidate/applications/{app.id}"
-        │        └─ dedupe_key = "application:{app.id}:status:{status}"
-        │
-        ├─ 6. Nếu status = "interview" và có interview_at
-        │      → ★ GỌI notify_interview(...)
-        │           title   = "Lời mời phỏng vấn"
-        │           message = "Bạn được mời phỏng vấn vị trí {tên tin} vào {thời gian}."
-        │
-        ├─ 7. db.commit()
-        └─ 8. Trả { message: "Cập nhật trạng thái hồ sơ thành công!", status }
-```
+
+Các bước hợp lệ là `SUBMITTED → REVIEWING → INTERVIEW`, rồi từ `INTERVIEW` sang `OFFERED` hoặc `REJECTED`. Trạng thái không hợp lệ trả về `422`. Chuyển đổi ngoài luồng trả về `409`. Hồ sơ dùng trạng thái chữ thường tiếp tục dùng định dạng đó, với `screening` tương ứng `REVIEWING`.
+
+Khi cập nhật thành công, API lưu trạng thái, ghi chú, lịch sử và thông báo `application_status_changed` trong cùng giao dịch. Hàm `notify_application_status_changed` gửi thông báo đến tài khoản ứng viên gắn với hồ sơ, kèm liên kết mở hồ sơ và dữ liệu trạng thái. Nếu không tạo được thông báo, giao dịch được hoàn tác.
 
 ### 5.3. Lên lịch phỏng vấn → ứng viên nhận lời mời
 
