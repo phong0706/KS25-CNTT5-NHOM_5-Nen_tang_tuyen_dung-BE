@@ -66,7 +66,7 @@ def get_public_company_detail(db: Session, slug: str) -> PublicCompanyDetailOut:
 
     return PublicCompanyDetailOut(
         slug=c.slug or str(c.id), name=c.name, tagline=c.tagline, description=c.description,
-        logo_url=safe_media(c.logo_url if c.logo_status != "removed" else None),
+        logo_url=safe_media(c.logo_url if c.logo_status in ("approved", "active") else None),
         cover_url=safe_media(c.cover_url),
         industry=CompanyIndustryOut(slug=ind_slug, name=ind_name) if ind_slug and ind_name else None,
         location=loc_name or c.address, address=c.address, size_range=c.size_range, founded_year=c.founded_year,

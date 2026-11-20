@@ -35,6 +35,7 @@ from app.models.job import (  # noqa: F401
     MetaWorkType,
     SavedJob,
 )
+from app.models.job_status_history import JobStatusHistory  # noqa: F401
 from app.models.job_skill import JobSkill  # noqa: F401
 
 # 5. Hồ sơ ứng tuyển, CV & lịch sử trạng thái

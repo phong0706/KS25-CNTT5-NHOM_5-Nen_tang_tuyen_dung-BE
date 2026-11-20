@@ -56,6 +56,10 @@ class NotificationType:
     JOB_APPROVED = "job_approved"
     JOB_REJECTED = "job_rejected"
     COMPANY_NEW_JOB = "company_new_job"
+    # Logo công ty
+    LOGO_PENDING = "logo_pending"
+    LOGO_APPROVED = "logo_approved"
+    LOGO_REJECTED = "logo_rejected"
     # Hồ sơ / CV
     CV_UPLOADED = "cv_uploaded"
     CV_DELETED = "cv_deleted"
@@ -153,6 +157,9 @@ _TYPE_TITLES: dict[str, str] = {
     NotificationType.JOB_APPROVED: "Tin tuyển dụng đã được duyệt",
     NotificationType.JOB_REJECTED: "Tin tuyển dụng chưa được duyệt",
     NotificationType.COMPANY_NEW_JOB: "Công ty bạn theo dõi có tin tuyển dụng mới",
+    NotificationType.LOGO_PENDING: "Logo công ty chờ duyệt",
+    NotificationType.LOGO_APPROVED: "Logo công ty đã được duyệt",
+    NotificationType.LOGO_REJECTED: "Logo công ty bị từ chối duyệt",
     NotificationType.CV_UPLOADED: "CV đã được tải lên thành công",
     NotificationType.CV_DELETED: "CV đã được xoá",
     NotificationType.SYSTEM: "Thông báo từ hệ thống",

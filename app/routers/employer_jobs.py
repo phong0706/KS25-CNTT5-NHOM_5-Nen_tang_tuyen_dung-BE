@@ -37,12 +37,15 @@ router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
 PAGE_SIZE = 10
 
 STATUS_META: dict[str, tuple[str, str]] = {
-    "draft": ("Nháp", "neutral"),
+    "draft": ("Bản nháp", "neutral"),
     "pending": ("Chờ duyệt", "warning"),
     "reverify_pending": ("Chờ xác minh lại", "warning"),
     "published": ("Đang tuyển", "success"),
+    "open": ("Đang tuyển", "success"),
     "hidden": ("Đang ẩn", "muted"),
     "closed": ("Đã đóng", "danger"),
+    "rejected": ("Bị xóa", "danger"),
+    "deleted": ("Bị xóa", "danger"),
 }
 
 ACTION_DEFS: dict[str, tuple[str, str]] = {
@@ -58,11 +61,14 @@ ACTION_DEFS: dict[str, tuple[str, str]] = {
 
 ALLOWED_ACTIONS_BY_STATUS: dict[str, list[str]] = {
     "draft": ["edit", "submit", "duplicate", "delete"],
-    "pending": ["edit", "withdraw", "duplicate"],
-    "reverify_pending": ["edit", "close"],
-    "published": ["edit", "hide", "close", "duplicate"],
-    "hidden": ["edit", "reopen", "close", "duplicate"],
+    "pending": ["edit", "withdraw", "duplicate", "delete"],
+    "reverify_pending": ["edit", "close", "delete"],
+    "published": ["edit", "hide", "close", "duplicate", "delete"],
+    "open": ["edit", "hide", "close", "duplicate", "delete"],
+    "hidden": ["edit", "reopen", "close", "duplicate", "delete"],
     "closed": ["edit", "reopen", "duplicate", "delete"],
+    "rejected": ["delete"],
+    "deleted": [],
 }
 
 TAB_DEFS: list[tuple[str, str]] = [
@@ -99,7 +105,7 @@ def list_employer_jobs(
     # 1. Đếm số lượng theo từng trạng thái bằng GROUP BY
     count_rows = db.execute(
         select(Job.status, func.count(Job.id))
-        .where(Job.employer_id == current_user.id)
+        .where(Job.employer_id == current_user.id, Job.deleted_at.is_(None))
         .group_by(Job.status)
     ).all()
 
@@ -139,7 +145,7 @@ def list_employer_jobs(
     new_applicants_col = func.coalesce(app_stats_subq.c.new_applicants_count, 0)
 
     # 3. Bộ lọc truy vấn danh sách
-    filters = [Job.employer_id == current_user.id]
+    filters = [Job.employer_id == current_user.id, Job.deleted_at.is_(None)]
     normalized_status = status.strip().lower()
     if normalized_status and normalized_status != "all":
         filters.append(Job.status == normalized_status)
@@ -236,7 +242,7 @@ TRANSITIONS: dict[str, tuple[set[str], str, str | None, str]] = {
 
 def _get_owned_job(db: Session, job_id: int, employer_id: int) -> Job:
     job = db.get(Job, job_id)
-    if not job:
+    if not job or job.deleted_at is not None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy tin tuyển dụng",
@@ -329,10 +335,11 @@ def duplicate_job(
     current_user: User = Depends(role_required("employer")),
 ):
     src = _get_owned_job(db, job_id, current_user.id)
+    company = db.scalar(select(Company).where(Company.employer_id == current_user.id).order_by(Company.id.asc()))
     copy_title = f"{src.title} (Bản sao)"[:255]
     new_job = Job(
         employer_id=current_user.id,
-        company_id=src.company_id,
+        company_id=company.id if company else src.company_id,
         title=copy_title,
         level=src.level,
         work_type=src.work_type,
@@ -361,19 +368,15 @@ def duplicate_job(
     )
 
 
-@router.delete("/{job_id}", response_model=JobDeleteOut, summary="Xóa tin tuyển dụng (chỉ nháp và đã đóng)")
+@router.delete("/{job_id}", response_model=JobDeleteOut, summary="Xóa tin tuyển dụng của nhà tuyển dụng (xóa mềm)")
 def delete_job(
     job_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required("employer")),
 ):
     job = _get_owned_job(db, job_id, current_user.id)
-    if job.status not in ("draft", "closed"):
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail="Chỉ có thể xóa tin ở trạng thái Nháp hoặc Đã đóng",
-        )
-    db.delete(job)
+    job.deleted_at = datetime.now(timezone.utc)
+    job.version += 1
     db.commit()
     return JobDeleteOut(id=job_id, message="Đã xóa tin tuyển dụng")
 
@@ -500,6 +503,9 @@ def update_employer_job(
         )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
+
+    if job.company_id is None and company is not None:
+        job.company_id = company.id
 
     job.title = body.title.strip()
     job.level = body.level

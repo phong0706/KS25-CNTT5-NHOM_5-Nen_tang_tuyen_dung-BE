@@ -72,17 +72,12 @@ def test_end_to_end_verification_workflow_and_concurrency():
     emp_b = User(email=f"emp_b_{tag}@test.vn", full_name="Employer B", password=hash_password("Pass123!"), role="employer", is_active=True)
     adm_1 = User(email=f"adm_1_{tag}@test.vn", full_name="Admin One", password=hash_password("Pass123!"), role="admin", is_active=True)
     adm_2 = User(email=f"adm_2_{tag}@test.vn", full_name="Admin Two", password=hash_password("Pass123!"), role="operator", is_active=True)
-    db.add_all([emp_a, emp_b, adm_1, adm_2])
-    db.commit()
-    for u in (emp_a, emp_b, adm_1, adm_2):
-        db.refresh(u)
+    db.add_all([emp_a, emp_b, adm_1, adm_2]); db.commit()
+    for u in (emp_a, emp_b, adm_1, adm_2): db.refresh(u)
 
     comp_a = Company(employer_id=emp_a.id, owner_id=emp_a.id, name=f"Công ty A {tag}", status=CompanyStatus.PENDING, verification_status="chua_xac_minh")
     comp_b = Company(employer_id=emp_b.id, owner_id=emp_b.id, name=f"Công ty B {tag}", status=CompanyStatus.PENDING, verification_status="chua_xac_minh")
-    db.add_all([comp_a, comp_b])
-    db.commit()
-    db.refresh(comp_a)
-    db.refresh(comp_b)
+    db.add_all([comp_a, comp_b]); db.commit(); db.refresh(comp_a); db.refresh(comp_b)
 
     h_emp_a = {"Authorization": f"Bearer {create_access_token(emp_a.id, emp_a.role)}"}
     h_emp_b = {"Authorization": f"Bearer {create_access_token(emp_b.id, emp_b.role)}"}
@@ -107,20 +102,10 @@ def test_end_to_end_verification_workflow_and_concurrency():
         assert r_draft.status_code == 201
 
         # 2. Gửi MST sai & gửi .exe đổi tên .png -> bị từ chối
-        r_bad_mst = client.post(
-            "/api/employer/company-verification",
-            data={"mst": "12345-abc"},
-            files={"file": ("license.png", VALID_PNG_BYTES, "image/png")},
-            headers=h_emp_a,
-        )
+        r_bad_mst = client.post("/api/employer/company-verification", data={"mst": "12345-abc"}, files={"file": ("license.png", VALID_PNG_BYTES, "image/png")}, headers=h_emp_a)
         assert r_bad_mst.status_code == 422 and r_bad_mst.json()["detail"]["field"] == "mst"
 
-        r_bad_exe = client.post(
-            "/api/employer/company-verification",
-            data={"mst": "0101248141"},
-            files={"file": ("giayphep.png", b"MZ\x90\x00\x03fake_exe", "image/png")},
-            headers=h_emp_a,
-        )
+        r_bad_exe = client.post("/api/employer/company-verification", data={"mst": "0101248141"}, files={"file": ("giayphep.png", b"MZ\x90\x00\x03fake_exe", "image/png")}, headers=h_emp_a)
         assert r_bad_exe.status_code == 422 and r_bad_exe.json()["detail"]["code"] == "INVALID_LICENSE_FILE"
 
         # 3. Gửi hợp lệ lần 1 -> 201; gửi lần 2 khi đang chờ -> 409
@@ -150,9 +135,14 @@ def test_end_to_end_verification_workflow_and_concurrency():
         assert client.post(f"/api/admin/company-verifications/{verif_id}/reject", json={"reason": "", "version": 1}, headers=h_adm_1).status_code == 422
         assert client.post(f"/api/admin/company-verifications/{verif_id}/reject", json={"reason": "quá ngắn", "version": 1}, headers=h_adm_1).status_code == 422
 
+        all_crits = ["license_and_tax", "domain_email", "account_age", "no_open_reports", "phone_verified"]
+        # 5b. Duyệt thiếu tiêu chí -> 400
+        assert client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1}, headers=h_adm_1).status_code == 400
+        assert client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1, "checked_criteria": ["license_and_tax"]}, headers=h_adm_1).status_code == 400
+
         # 6. Hai admin cùng duyệt một yêu cầu với cùng version=1 -> 1 thành công (200), 1 nhận 409, chỉ 1 thông báo!
-        r_a1 = client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1}, headers=h_adm_1)
-        r_a2 = client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1}, headers=h_adm_2)
+        r_a1 = client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1, "checked_criteria": all_crits}, headers=h_adm_1)
+        r_a2 = client.post(f"/api/admin/company-verifications/{verif_id}/approve", json={"version": 1, "checked_criteria": all_crits}, headers=h_adm_2)
         assert sorted([r_a1.status_code, r_a2.status_code]) == [200, 409]
 
         db.rollback()
@@ -172,7 +162,7 @@ def test_end_to_end_verification_workflow_and_concurrency():
         # Gửi và duyệt lại để test thu hồi xác minh
         r_resub = client.post("/api/employer/company-verification", data={"mst": "0312345678"}, files={"file": ("gp2.png", VALID_PNG_BYTES, "image/png")}, headers=h_emp_a)
         assert r_resub.status_code == 201
-        assert client.post(f"/api/admin/company-verifications/{r_resub.json()['request']['id']}/approve", json={"version": 1}, headers=h_adm_1).status_code == 200
+        assert client.post(f"/api/admin/company-verifications/{r_resub.json()['request']['id']}/approve", json={"version": 1, "checked_criteria": all_crits}, headers=h_adm_1).status_code == 200
         db.rollback()
         assert db.get(Job, open_job.id).status == "published"
 

@@ -128,3 +128,11 @@ def list_rejection_reasons(db: Session = Depends(get_db)):
     return [{"id": r[0], "slug": r[1], "name": r[2], "sort_order": r[3]} for r in rows]
 
 
+@router.get("/review-statuses", summary="Nhãn tiếng Việt cho các trạng thái xét duyệt")
+def get_review_statuses():
+    """Trả về nhãn tiếng Việt cho các trạng thái xét duyệt (draft, pending, approved, rejected)."""
+    from app.models.review_status import REVIEW_STATUS_LABELS
+    return REVIEW_STATUS_LABELS
+
+
+

@@ -4,11 +4,11 @@ import re
 import statistics
 
 from fastapi import HTTPException, status as http_status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.application import Application
-from app.models.company import Company
+from app.models.company import Company, CompanyStatus
 from app.models.job import Job, MetaCategory, MetaSkill, SavedJob
 from app.models.user import User
 from app.schemas.job import FeaturedCompanyOut, HomeStatsOut
@@ -100,13 +100,19 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
             Job,
             Company.name.label("company_name"),
             Company.slug.label("company_slug"),
-            Company.logo_url.label("company_logo"),
+            case((Company.logo_status.in_(["approved", "active"]), Company.logo_url), else_=None).label("company_logo"),
             MetaCategory.name.label("category_name"),
             MetaCategory.slug.label("category_slug"),
         )
         .outerjoin(Company, Job.company_id == Company.id)
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
-        .where(Job.id == job_id, Job.status == "published")
+        .where(
+            Job.id == job_id,
+            Job.status.in_(["open", "published"]),
+            Job.deleted_at.is_(None),
+            or_(Job.deadline.is_(None), Job.deadline >= datetime.now(timezone.utc).date()),
+            or_(Company.verification_status == "da_xac_minh", Company.status == CompanyStatus.VERIFIED, Company.is_verified == True),  # noqa: E712
+        )
     )
     row = db.execute(stmt).first()
     if not row:
