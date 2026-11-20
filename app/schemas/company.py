@@ -15,9 +15,12 @@ class CompanySalaryRangeOut(BaseModel):
 
 
 class CompanyDetailSalaryOut(BaseModel):
-    min: int
-    max: int
-    sample_size: int
+    min: int | None = None
+    max: int | None = None
+    median: int | None = None
+    p25: int | None = None
+    p75: int | None = None
+    sample_size: int = 0
 
 
 class CompanyFacetItemOut(BaseModel):
@@ -82,6 +85,7 @@ class PublicCompanyDetailOut(BaseModel):
     founded_year: int | None = None
     website: str | None = None
     is_verified: bool = False
+    verified_at: datetime | None = None
     updated_at: datetime | None = None
     open_jobs: int = 0
     salary_range: CompanyDetailSalaryOut | None = None

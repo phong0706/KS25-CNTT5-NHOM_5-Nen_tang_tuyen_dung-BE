@@ -2,7 +2,7 @@
 Tuân thủ techrecruit-rules: thuần túy, <= 120 dòng, không phụ thuộc DB/web framework.
 """
 import io
-from PIL import Image, ImageChops, ImageOps
+from PIL import Image, ImageChops, ImageOps, ImageStat
 
 Image.MAX_IMAGE_PIXELS = 25_000_000
 MAX_RAW_BYTES = 2 * 1024 * 1024
@@ -25,10 +25,14 @@ def _autocrop(img: Image.Image) -> Image.Image:
         mask = alpha.point(lambda a: 255 if a > 15 else 0)
         bbox = mask.getbbox()
         if not bbox:
-            raise LogoError("blank_image")
+            raise LogoError("blank_image", "Ảnh toàn trong suốt hoặc không có nội dung rõ ràng.")
         return img.crop(bbox)
 
     rgb = img.convert("RGB")
+    stat = ImageStat.Stat(rgb)
+    if max(stat.stddev) < 2.0:
+        raise LogoError("blank_image", "Ảnh quá đơn sắc hoặc là ảnh giữ chỗ. Vui lòng tải lên logo thật của doanh nghiệp.")
+
     w, h = rgb.size
     corners = [rgb.getpixel((0, 0)), rgb.getpixel((w - 1, 0)), rgb.getpixel((0, h - 1)), rgb.getpixel((w - 1, h - 1))]
     bg_r = sum(c[0] for c in corners) // 4
@@ -41,7 +45,7 @@ def _autocrop(img: Image.Image) -> Image.Image:
         mask = diff_l.point(lambda p: 255 if p > 15 else 0)
         bbox = mask.getbbox()
         if not bbox:
-            raise LogoError("blank_image")
+            raise LogoError("blank_image", "Ảnh toàn một màu hoặc trong suốt, không tìm thấy biểu tượng logo.")
         return img.crop(bbox)
 
     return img

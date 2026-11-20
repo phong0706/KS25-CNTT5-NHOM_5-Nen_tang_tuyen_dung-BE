@@ -143,7 +143,10 @@ def upload_company_logo(db: Session, company_id: int, content: bytes, user_id: i
 
 def apply_processed_logo(db: Session, comp: Company, processed: dict[int, bytes], actor_id: int | None = None) -> CompanyLogo:
     k256, k512 = save_processed_files(processed)
-    db.query(CompanyLogo).filter_by(company_id=comp.id, is_current=True).update({"is_current": False, "status": "da_thay"})
+    db.query(CompanyLogo).filter(
+        CompanyLogo.company_id == comp.id,
+        or_(CompanyLogo.is_current == True, CompanyLogo.status == "cho_duyet"),
+    ).update({"is_current": False, "status": "da_thay"}, synchronize_session=False)
     next_ver = (comp.logo_version or 1) + 1
     logo = CompanyLogo(
         company_id=comp.id, file_key=k256, file_key_2x=k512, version=next_ver,
@@ -168,7 +171,9 @@ def approve_company_logo(db: Session, logo_id: int, actor_id: int, actor_name: s
     if logo.is_current and logo.status == "dang_dung":
         return logo
     newer = db.query(CompanyLogo).filter(
-        CompanyLogo.company_id == logo.company_id, CompanyLogo.status == "cho_duyet", CompanyLogo.version > logo.version,
+        CompanyLogo.company_id == logo.company_id,
+        CompanyLogo.status == "cho_duyet",
+        CompanyLogo.version > logo.version,
     ).first()
     if newer:
         raise HTTPException(409, "Có bản logo mới hơn đang chờ duyệt.")
@@ -176,7 +181,11 @@ def approve_company_logo(db: Session, logo_id: int, actor_id: int, actor_name: s
     if not comp:
         raise HTTPException(404, "Không tìm thấy thông tin công ty.")
 
-    db.query(CompanyLogo).filter_by(company_id=logo.company_id, is_current=True).update({"is_current": False, "status": "da_thay"})
+    db.query(CompanyLogo).filter(
+        CompanyLogo.company_id == logo.company_id,
+        CompanyLogo.id != logo.id,
+        or_(CompanyLogo.is_current == True, CompanyLogo.status == "cho_duyet"),
+    ).update({"is_current": False, "status": "da_thay"}, synchronize_session=False)
     logo.is_current, logo.status, logo.reviewed_by = True, "dang_dung", actor_id
     logo.reviewed_at = datetime.now(timezone.utc)
     comp.logo_version = max((comp.logo_version or 1) + 1, logo.version)
@@ -238,7 +247,10 @@ def remove_company_logo(db: Session, company_id: int, actor_id: int, actor_name:
     comp = db.query(Company).filter_by(id=company_id).first()
     if not comp:
         raise HTTPException(404, "Không tìm thấy công ty.")
-    db.query(CompanyLogo).filter_by(company_id=company_id, is_current=True).update({"is_current": False, "status": "da_thay"})
+    db.query(CompanyLogo).filter(
+        CompanyLogo.company_id == company_id,
+        or_(CompanyLogo.is_current == True, CompanyLogo.status == "cho_duyet"),
+    ).update({"is_current": False, "status": "da_thay"}, synchronize_session=False)
     comp.logo_url, comp.logo_url_2x, comp.logo, comp.logo_status = None, None, None, "missing"
     comp.logo_version = (comp.logo_version or 1) + 1
     db.add(AuditLog(

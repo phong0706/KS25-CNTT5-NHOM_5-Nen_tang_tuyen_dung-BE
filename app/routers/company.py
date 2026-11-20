@@ -178,6 +178,8 @@ async def upload_logo(
         "logo_id": logo_entry.id,
         "company_id": company.id,
         "version": logo_entry.version,
+        "logo_url": f"/uploads/logos/{logo_entry.file_key}?v={logo_entry.version}",
+        "logo_url_2x": f"/uploads/logos/{logo_entry.file_key_2x}?v={logo_entry.version}" if logo_entry.file_key_2x else None,
     }
 
 

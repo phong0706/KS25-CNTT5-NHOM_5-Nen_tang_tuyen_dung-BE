@@ -32,8 +32,30 @@ def get_public_company_detail(db: Session, slug: str) -> PublicCompanyDetailOut:
     agg_row = db.execute(select(agg_sub).where(agg_sub.c.company_id == c.id)).first()
     open_jobs = int(agg_row.open_jobs or 0) if agg_row else 0
     sal_range = None
-    if agg_row and int(agg_row.salary_sample_size or 0) >= 2 and agg_row.min_salary is not None and agg_row.max_salary is not None:
-        sal_range = CompanyDetailSalaryOut(min=int(agg_row.min_salary), max=int(agg_row.max_salary), sample_size=int(agg_row.salary_sample_size))
+    sal_rows = db.execute(
+        select(Job.salary_min, Job.salary_max)
+        .where(
+            *open_job_conds(c.id),
+            Job.is_salary_negotiable == False,  # noqa: E712
+            (Job.salary_min.is_not(None) | Job.salary_max.is_not(None)),
+        )
+    ).all()
+    if len(sal_rows) >= 2:
+        from app.services.salary_stats import compute_salary_insights
+        sal_vals: list[float] = []
+        for r in sal_rows:
+            s_min = float(r.salary_min) if r.salary_min is not None else float(r.salary_max)
+            s_max = float(r.salary_max) if r.salary_max is not None else float(r.salary_min)
+            sal_vals.append((s_min + s_max) / 2.0)
+        insights = compute_salary_insights(sal_vals)
+        sal_range = CompanyDetailSalaryOut(
+            min=insights["min"],
+            max=insights["max"],
+            median=insights["median"],
+            p25=insights["p25"],
+            p75=insights["p75"],
+            sample_size=insights["sample_size"],
+        )
 
     skills_map = extract_top_skills_by_company(db, [c.id], 8)
     sim_rows = []
@@ -58,7 +80,8 @@ def get_public_company_detail(db: Session, slug: str) -> PublicCompanyDetailOut:
         cover_url=safe_media(c.cover_url),
         industry=CompanyIndustryOut(slug=ind_slug, name=ind_name) if ind_slug and ind_name else None,
         location=loc_name or c.address, address=c.address, size_range=c.size_range, founded_year=c.founded_year,
-        website=safe_site(c.website), is_verified=bool(c.is_verified), updated_at=c.updated_at,
+        website=safe_site(c.website), is_verified=bool(c.is_verified),
+        verified_at=c.verified_at or (c.updated_at if c.is_verified else None), updated_at=c.updated_at,
         open_jobs=open_jobs, salary_range=sal_range, latest_job_at=agg_row.latest_job_at if agg_row else None,
         top_skills=skills_map.get(c.id, []), similar=similar,
     )
