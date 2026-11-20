@@ -590,6 +590,16 @@ def get_public_job_detail(
         "published_at": job.published_at,
         "is_saved": is_saved,
         "applied": applied,
+        "company_is_verified": bool(
+            comp and (
+                comp.is_verified
+                or str(getattr(comp, "status", "")).upper() in ("VERIFIED", "COMPANYSTATUS.VERIFIED")
+                or getattr(comp, "verification_status", "") == "da_xac_minh"
+            )
+        ),
+        "company_size": comp.size if comp else None,
+        "company_address": comp.address if comp else None,
+        "company_website": comp.website if comp else None,
     }
 
 
