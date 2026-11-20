@@ -60,10 +60,20 @@ def _status_map(db: Session) -> dict[str, MetaApplicationStatus]:
 
 
 def _build_job_summary(job_row) -> AppJobSummary:
+    logo = getattr(job_row, "company_logo", None)
+    logo_2x = getattr(job_row, "company_logo_2x", None)
+    ver = getattr(job_row, "company_logo_version", None)
+    if logo and ver:
+        logo = f"{logo}?v={ver}"
+    if logo_2x and ver:
+        logo_2x = f"{logo_2x}?v={ver}"
     return AppJobSummary(
         id=job_row.id,
         title=job_row.title,
+        company_slug=getattr(job_row, "company_slug", None),
         company_name=job_row.company_name,
+        company_logo=logo,
+        company_logo_2x=logo_2x,
         location=job_row.location,
         salary_min=job_row.salary_min,
         salary_max=job_row.salary_max,

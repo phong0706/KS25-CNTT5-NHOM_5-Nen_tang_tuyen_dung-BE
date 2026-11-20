@@ -67,6 +67,8 @@ class AppJobSummary(BaseModel):
     title: str
     company_slug: str | None = None
     company_name: str | None = None
+    company_logo: str | None = None
+    company_logo_2x: str | None = None
     location: str | None = None
     salary_min: int | None = None
     salary_max: int | None = None

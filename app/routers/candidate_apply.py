@@ -39,6 +39,9 @@ _JOB_COLS = (
     Job.title,
     Company.slug.label("company_slug"),
     Company.name.label("company_name"),
+    Company.logo_url.label("company_logo"),
+    Company.logo_url_2x.label("company_logo_2x"),
+    Company.logo_version.label("company_logo_version"),
     Job.location,
     Job.salary_min,
     Job.salary_max,
@@ -53,8 +56,16 @@ def _smap(db: Session) -> dict[str, MetaApplicationStatus]:
 
 
 def _job_summary(r) -> AppJobSummary:
+    logo = getattr(r, "company_logo", None)
+    logo_2x = getattr(r, "company_logo_2x", None)
+    ver = getattr(r, "company_logo_version", None)
+    if logo and ver:
+        logo = f"{logo}?v={ver}"
+    if logo_2x and ver:
+        logo_2x = f"{logo_2x}?v={ver}"
     return AppJobSummary(
         id=r.id, title=r.title, company_slug=getattr(r, "company_slug", None), company_name=r.company_name,
+        company_logo=logo, company_logo_2x=logo_2x,
         location=r.location, salary_min=r.salary_min, salary_max=r.salary_max,
         is_salary_negotiable=r.is_salary_negotiable, work_type=r.work_type,
         status=r.job_status,
