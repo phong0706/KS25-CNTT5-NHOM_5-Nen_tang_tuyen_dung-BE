@@ -58,3 +58,18 @@ def test_hero_featured_companies():
         assert "id" in comp
         assert "name" in comp
         assert "slug" in comp
+
+
+def test_invariant_hero_n_equals_jobs_api_default_total():
+    """Bất biến chuẩn hóa: N hero (total_published_jobs tại /api/stats/home) == total của /api/jobs mặc định."""
+    res_stats = client.get("/api/stats/home")
+    assert res_stats.status_code == 200
+    stats_data = res_stats.json()
+
+    res_jobs = client.get("/api/jobs")
+    assert res_jobs.status_code == 200
+    jobs_data = res_jobs.json()
+
+    assert stats_data["total_published_jobs"] == jobs_data["total"], (
+        f"Lệch pha số liệu: /api/stats/home={stats_data['total_published_jobs']} != /api/jobs={jobs_data['total']}"
+    )

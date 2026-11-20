@@ -32,6 +32,7 @@ from app.schemas.job import (
 from app.services.matching import compute_job_match, normalize_skill_list
 from app.services.skills_normalizer import normalize_skills
 from app.services.salary_insight_service import fetch_peers_salaries_map, get_job_salary_insight
+from app.services.job_filter_service import get_active_job_conds
 
 router = APIRouter(tags=["Public Jobs"])
 
@@ -54,12 +55,7 @@ def _build_filters(
     skills: str = "",
     exclude: str = "",
 ):
-    conds = [
-        Job.status == "published",
-        Company.is_visible == True,  # noqa: E712
-        or_(Job.deadline.is_(None), Job.deadline >= date.today()),
-        ~Job.title.regexp_match(r"(?i)^(mmmmmm|test\b|test\s+|.*test\s+job|valid\s+engineer|pending\s+engineer)"),
-    ]
+    conds = get_active_job_conds()
 
     kw = q.strip()
     if kw:
@@ -436,13 +432,22 @@ def list_featured_companies(
 
 @router.get("/stats/home", response_model=HomeStatsOut, summary="Thống kê thật cho trang chủ")
 def get_home_stats(db: Session = Depends(get_db)):
-    total_published = int(db.scalar(select(func.count(Job.id)).where(Job.status == "published")) or 0)
+    active_conds = get_active_job_conds()
+    total_published = int(
+        db.scalar(
+            select(func.count(Job.id))
+            .join(Company, Job.company_id == Company.id)
+            .where(and_(*active_conds))
+        ) or 0
+    )
     now_utc = datetime.now(timezone.utc)
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     today_new = int(
         db.scalar(
-            select(func.count(Job.id)).where(
-                Job.status == "published",
+            select(func.count(Job.id))
+            .join(Company, Job.company_id == Company.id)
+            .where(
+                and_(*active_conds),
                 func.coalesce(Job.published_at, Job.created_at) >= today_start,
             )
         ) or 0
@@ -450,8 +455,10 @@ def get_home_stats(db: Session = Depends(get_db)):
     seven_days_ago = now_utc - timedelta(days=7)
     weekly_new = int(
         db.scalar(
-            select(func.count(Job.id)).where(
-                Job.status == "published",
+            select(func.count(Job.id))
+            .join(Company, Job.company_id == Company.id)
+            .where(
+                and_(*active_conds),
                 func.coalesce(Job.published_at, Job.created_at) >= seven_days_ago,
             )
         ) or 0
