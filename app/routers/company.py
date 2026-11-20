@@ -16,6 +16,7 @@ from app.core.security import get_current_user
 from app.crud import company as company_crud
 from app.db.session import get_db
 from app.models.company import CompanyStatus
+from app.models.company_logo import CompanyLogo
 from app.models.user import User
 from app.schemas.company_schema import (
     CompanyProfileUpdate,
@@ -23,6 +24,7 @@ from app.schemas.company_schema import (
     CompanyVerificationDecision,
     CompanyVerificationSubmit,
 )
+from app.services.company_logo_service import remove_company_logo, upload_company_logo
 from app.services.company_verification_actions import handle_employer_mst_update_if_changed
 
 router = APIRouter(prefix="/company", tags=["Company"])
@@ -119,8 +121,21 @@ def _save_upload(file: UploadFile, subfolder: str) -> str:
     response_model=CompanyResponse,
     summary="Xem hồ sơ công ty của tôi",
 )
-def get_my_company(company=Depends(_get_my_company)):
-    """Trả về toàn bộ thông tin hồ sơ công ty của employer đang đăng nhập."""
+def get_my_company(
+    company=Depends(_get_my_company),
+    db: Session = Depends(get_db),
+):
+    """Trả về toàn bộ thông tin hồ sơ công ty của employer đang đăng nhập kèm trạng thái logo."""
+    pending = db.query(CompanyLogo).filter_by(company_id=company.id, status="cho_duyet").order_by(CompanyLogo.id.desc()).first()
+    if pending:
+        company.logo_status = "pending"
+        company.pending_logo = {
+            "id": pending.id,
+            "version": pending.version,
+            "logo_url": f"/uploads/logos/{pending.file_key}?v={pending.version}",
+            "logo_url_2x": f"/uploads/logos/{pending.file_key_2x}?v={pending.version}" if pending.file_key_2x else None,
+            "created_at": pending.created_at.isoformat() if pending.created_at else None,
+        }
     return company
 
 
@@ -146,22 +161,44 @@ def update_my_company(
 
 @router.post(
     "/me/logo",
-    response_model=CompanyResponse,
-    summary="Upload logo công ty (jpg/png, tối đa 2 MB)",
+    summary="Upload logo công ty (PNG/JPEG/WebP, tối đa 2 MB, chờ duyệt)",
 )
-def upload_logo(
-    file: UploadFile = File(..., description="File ảnh logo (.jpg hoặc .png, tối đa 2 MB)"),
+async def upload_logo(
+    file: UploadFile = File(..., description="File ảnh logo (.png, .jpg, .webp, tối đa 2 MB)"),
     company=Depends(_get_my_company),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload logo công ty.
+    """Upload logo công ty qua module chuẩn hóa và đưa vào hàng đợi duyệt."""
+    content = await file.read()
+    logo_entry = upload_company_logo(db, company.id, content, current_user.id)
+    return {
+        "status": "pending",
+        "message": "Logo đã được tải lên thành công và đang chờ admin duyệt.",
+        "logo_id": logo_entry.id,
+        "company_id": company.id,
+        "version": logo_entry.version,
+    }
 
-    - Chỉ chấp nhận **JPG / PNG**.
-    - Dung lượng tối đa **2 MB**.
-    - File cũ **không** tự động xóa (có thể dọn dẹp định kỳ nếu cần).
-    """
-    logo_url = _save_upload(file, "logos")
-    return company_crud.update_company_logo(db, company, logo_url)
+
+@router.delete(
+    "/me/logo",
+    summary="Xóa logo công ty của tôi",
+)
+def remove_my_logo(
+    company=Depends(_get_my_company),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    comp = remove_company_logo(
+        db, company.id, current_user.id, current_user.full_name or current_user.email, current_user.role
+    )
+    return {
+        "status": "success",
+        "message": f"Đã gỡ logo của công ty {comp.name}.",
+        "company_id": comp.id,
+        "logo_version": comp.logo_version,
+    }
 
 
 @router.post(

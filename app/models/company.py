@@ -53,9 +53,10 @@ class Company(Base):
     tagline: Mapped[str | None] = mapped_column(String(120), nullable=True)
     slug: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
 
-    # URL logo (giữ cả logo & logo_url để tương thích cả 2 nhánh)
+    # URL logo (giữ cả logo & logo_url để tương thích cả 2 nhánh, thêm logo_url_2x cho srcset)
     logo: Mapped[str | None] = mapped_column(String(500), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    logo_url_2x: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # URL ảnh bìa (giữ cả cover_image & cover_url để tương thích cả 2 nhánh)
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -105,6 +106,7 @@ class Company(Base):
 
     # Quản lý trạng thái & lịch sử tải lên logo (active | removed | missing)
     logo_status: Mapped[str] = mapped_column(String(20), default="missing", nullable=False)
+    logo_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     logo_uploaded_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     logo_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -119,6 +121,10 @@ def _sync_company_computed_fields(_mapper, _connection, target: Company) -> None
     target.search_text = normalize_search_text(target.name, target.tagline, target.address)[:500]
     if target.verification_status == "da_xac_minh" or target.status == CompanyStatus.VERIFIED:
         target.is_verified = True
+    if not target.slug and target.name:
+        import uuid
+        from app.services.public_company_rules import slugify_company
+        target.slug = f"{slugify_company(target.name)}-{uuid.uuid4().hex[:6]}"[:120]
 
 
 event.listen(Company, "before_insert", _sync_company_computed_fields)

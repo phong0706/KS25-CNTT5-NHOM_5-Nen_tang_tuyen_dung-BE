@@ -1,9 +1,9 @@
-"""Router Quản trị cấp cao: Gỡ logo, Xóa công ty, Danh sách/Xem CV ứng viên & Nhật ký thay đổi.
-Giới hạn: < 200 dòng.
-"""
+"""Router Quản trị cấp cao: Gỡ logo, Xóa công ty, CV & Nhật ký."""
 from pathlib import Path
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -12,14 +12,11 @@ from app.db.session import get_db
 from app.models.application import Application, CV
 from app.models.audit_log import AuditLog
 from app.models.company import Company
+from app.models.company_logo import CompanyLogo
 from app.models.job import Job
 from app.models.user import User
-from app.routers.admin_companies_cvs import (
-    _check_company_access,
-    _full_logo_url,
-    _serialize_company,
-    _write_audit,
-)
+from app.routers.admin_companies_cvs import _check_company_access, _full_logo_url, _serialize_company, _write_audit
+from app.services.company_logo_service import clear_home_companies_cache
 
 router = APIRouter(prefix="/admin", tags=["Admin Audit & CV Governance"])
 
@@ -35,23 +32,36 @@ def remove_company_logo_admin(
 
     old_status = comp.logo_status or "active"
     comp.logo_status = "removed"
+    comp.logo_url = None
+    comp.logo_version = (comp.logo_version or 1) + 1
+    db.query(CompanyLogo).filter_by(company_id=comp.id, is_current=True).update({"is_current": False, "status": "da_thay"})
     full_url = _full_logo_url(request, comp.logo_url or comp.logo)
     _write_audit(db, current_user, "company_logo", comp.id, "remove_logo", f"{old_status} ({full_url or 'N/A'})", f"removed ({full_url or 'N/A'})", comp.name)
     db.commit()
+    clear_home_companies_cache()
     db.refresh(comp)
     open_jobs = db.scalar(select(func.count(Job.id)).where(and_(Job.company_id == comp.id, Job.status == "published"))) or 0
     return _serialize_company(db, request, comp, open_jobs)
 
 
+class DeleteCompanyIn(BaseModel):
+    confirm_name: Optional[str] = None
+
+
 @router.delete("/companies/{company_id}", summary="Xóa công ty (chỉ dành cho Admin cấp cao)")
 def delete_company_admin(
     company_id: int,
+    payload: Optional[DeleteCompanyIn] = None,
+    confirm_name: Optional[str] = Query(None),
     current_user: User = Depends(role_required("admin")),
     db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)
     if not comp:
         raise HTTPException(status_code=404, detail="Không tìm thấy công ty.")
+    provided = (payload.confirm_name if payload else None) or confirm_name
+    if not provided or provided != comp.name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Tên công ty xác nhận không khớp.")
     name_snap = comp.name
     _write_audit(db, current_user, "company", comp.id, "delete_company", name_snap, "deleted", name_snap)
     db.delete(comp)

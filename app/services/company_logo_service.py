@@ -67,7 +67,7 @@ def validate_logo_file(content: bytes, filename: str) -> str:
         raise HTTPException(422, "Định dạng ảnh không hợp lệ.")
 
 
-def save_processed_files(processed: dict[int, bytes]) -> tuple[str, str]:
+def save_processed_files(processed: dict[int, bytes], raw_orig: bytes | None = None) -> tuple[str, str]:
     logo_dir = Path(settings.UPLOAD_DIR) / "logos"
     logo_dir.mkdir(parents=True, exist_ok=True)
     fid = uuid.uuid4().hex
@@ -75,7 +75,33 @@ def save_processed_files(processed: dict[int, bytes]) -> tuple[str, str]:
     with open(logo_dir / k256, "wb") as f1, open(logo_dir / k512, "wb") as f2:
         f1.write(processed[256])
         f2.write(processed[512])
+    if raw_orig:
+        with open(logo_dir / f"{fid}_orig", "wb") as fo:
+            fo.write(raw_orig)
     return k256, k512
+
+
+def get_logo_original_path(file_key: str) -> Path | None:
+    fid = file_key.split("_")[0]
+    logo_dir = Path(settings.UPLOAD_DIR) / "logos"
+    cand = logo_dir / f"{fid}_orig"
+    if cand.exists() and cand.is_file():
+        return cand
+    cand2 = logo_dir / file_key
+    return cand2 if (cand2.exists() and cand2.is_file()) else None
+
+
+def get_logo_original_meta(file_key: str) -> dict:
+    orig_path = get_logo_original_path(file_key)
+    if orig_path and orig_path.exists():
+        try:
+            from PIL import Image
+            with Image.open(orig_path) as im:
+                w, h = im.size
+                return {"orig_width": w, "orig_height": h, "orig_ratio": round(w / h, 2) if h else 1.0}
+        except Exception:
+            pass
+    return {"orig_width": 256, "orig_height": 256, "orig_ratio": 1.0}
 
 
 def upload_company_logo(db: Session, company_id: int, content: bytes, user_id: int) -> CompanyLogo:
@@ -87,7 +113,7 @@ def upload_company_logo(db: Session, company_id: int, content: bytes, user_id: i
     except LogoError as e:
         handle_logo_error(e)
 
-    k256, k512 = save_processed_files(processed)
+    k256, k512 = save_processed_files(processed, raw_orig=content)
     max_ver = db.query(func.max(CompanyLogo.version)).filter_by(company_id=company_id).scalar() or comp.logo_version or 0
     next_ver = max_ver + 1
     new_logo = CompanyLogo(

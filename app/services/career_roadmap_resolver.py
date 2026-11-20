@@ -73,7 +73,7 @@ def _infer_candidate_context(db: Session, user_id: int, cand_skills: list[str], 
     if prof and not cand_skills and prof.skills_json:
         cand_skills = _parse_raw_skills(prof.skills_json)
     if not cand_skills:
-        cs_rows = db.execute(text("SELECT skill_name FROM candidate_skills WHERE user_id = :uid"), {"uid": user_id}).fetchall()
+        cs_rows = db.execute(text("SELECT cs.skill_name FROM candidate_skills cs JOIN candidate_profiles cp ON cs.profile_id = cp.id WHERE cp.user_id = :uid"), {"uid": user_id}).fetchall()
         cand_skills = [str(r[0]).strip() for r in cs_rows if r[0]]
     if not cand_skills:
         cand_skills = ["Python", "FastAPI", "MySQL", "Docker", "Redis"]

@@ -31,15 +31,36 @@ def list_featured_companies(
     db: Session = Depends(get_db),
 ):
     stmt = (
-        select(Company.id, Company.name, Company.slug, func.count(Job.id).label("job_count"))
+        select(
+            Company.id,
+            Company.name,
+            Company.slug,
+            Company.logo_url,
+            Company.logo_version,
+            func.count(Job.id).label("job_count"),
+        )
         .join(Job, and_(Job.company_id == Company.id, Job.status == "published"))
         .where(Company.is_visible == True, Company.is_draft == False)  # noqa: E712
-        .group_by(Company.id, Company.slug)
+        .group_by(Company.id, Company.slug, Company.logo_url, Company.logo_version)
         .having(func.count(Job.id) > 0)
         .order_by(func.count(Job.id).desc(), Company.id.asc())
         .limit(limit)
     )
-    return [FeaturedCompanyOut(id=r.id, name=r.name, slug=r.slug, job_count=int(r.job_count)) for r in db.execute(stmt).all()]
+    rows = db.execute(stmt).all()
+    out = []
+    for r in rows:
+        url = r.logo_url
+        if url and r.logo_version:
+            url = f"{url}?v={r.logo_version}"
+        out.append(FeaturedCompanyOut(
+            id=r.id,
+            name=r.name,
+            slug=r.slug,
+            job_count=int(r.job_count),
+            logo_url=url,
+            logo_version=int(r.logo_version or 1),
+        ))
+    return out
 
 
 @router.get("", response_model=PublicCompanyListOut, summary="Danh sách công ty công khai")

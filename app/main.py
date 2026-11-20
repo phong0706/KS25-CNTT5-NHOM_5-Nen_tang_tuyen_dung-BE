@@ -29,12 +29,14 @@ from app.routers import (
     candidate_cover_letters,
     candidate_cv_documents,
     candidate_detail,
+    candidate_job_matches,
     candidate_profile,
     candidate_recommended,
     candidate_saved_jobs,
     career_path,
     companies,
     company,
+    company_logos,
     cv,
     employer_applications,
     employer_interviews,
@@ -117,6 +119,9 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+# Đăng ký router phục vụ ảnh logo có header bảo mật nosniff trước khi mount StaticFiles
+app.include_router(company_logos.router)
+
 # Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py & avatars)
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
@@ -151,6 +156,7 @@ app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
+app.include_router(candidate_job_matches.router, prefix="/api")
 app.include_router(candidate_apply.router, prefix="/api")
 app.include_router(candidate_detail.router, prefix="/api")
 app.include_router(nav_meta.router)
