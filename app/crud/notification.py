@@ -11,31 +11,18 @@ def create_notification(
     title: str,
     message: str,
     related_url: str | None = None,
-) -> Notification:
-    """Tạo thông báo mới cho người dùng.
-    
-    Args:
-        db: Database session
-        user_id: ID của người nhận thông báo
-        notification_type: Loại thông báo (VD: "NEW_APPLICATION", "STATUS_CHANGE")
-        title: Tiêu đề thông báo
-        message: Nội dung chi tiết
-        related_url: Link liên quan (optional)
-    
-    Returns:
-        Notification object vừa tạo
-    """
-    notification = Notification(
+) -> Notification | None:
+    """Tạo thông báo mới qua service chuẩn (thay cho insert trực tiếp)."""
+    from app.services.notification import create_notification as svc_create_notif
+    return svc_create_notif(
+        db=db,
         user_id=user_id,
-        notification_type=notification_type,
+        type=notification_type,
         title=title,
         message=message,
-        related_url=related_url,
+        link=related_url,
+        commit=True,
     )
-    db.add(notification)
-    db.commit()
-    db.refresh(notification)
-    return notification
 
 
 def notify_new_application(

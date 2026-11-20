@@ -1,20 +1,5 @@
-"""API quản lý tài khoản người dùng (dành cho admin).
-
-Hỗ trợ:
-- Danh sách tài khoản: lọc theo vai trò / trạng thái, tìm kiếm, phân trang
-    GET /api/users?role=&is_active=&keyword=&page=&page_size=
-    (Tương thích ngược với tham số q, skip, limit)
-- Thống kê tổng quan người dùng:
-    GET /api/users/stats
-- Khoá/Mở khoá nhanh:
-    PATCH /api/users/{user_id}/toggle-status
-- Khoá tài khoản kèm lý do (sau khi khoá: không đăng nhập được, token cũ cũng bị chặn):
-    POST /api/users/{user_id}/lock      {"locked_reason": "..."}
-- Mở khoá tài khoản:
-    POST /api/users/{user_id}/unlock
-
-Mọi endpoint đều yêu cầu Bearer token của tài khoản role=admin.
-"""
+"""API quản lý tài khoản người dùng (dành cho admin). Giới hạn <= 200 dòng."""
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -26,8 +11,23 @@ from app.models.user import User
 from app.schemas.user import UserListOut, UserLockIn, UserOut
 
 router = APIRouter(prefix="/users", tags=["Users"])
-
 VALID_ROLES = {"candidate", "employer", "operator", "admin"}
+
+
+def _kick_locked_user_realtime(user_id: int):
+    """Đóng tức thì kết nối WebSocket và hủy vé của user bị khóa."""
+    try:
+        from app.realtime.manager import manager
+        from app.realtime.tickets import ticket_store
+        from app.realtime.protocol import CloseCode
+        ticket_store.revoke_user_tickets(user_id)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(manager.disconnect_user(user_id, code=CloseCode.FORBIDDEN, reason="Account locked"))
+        except RuntimeError:
+            asyncio.run(manager.disconnect_user(user_id, code=CloseCode.FORBIDDEN, reason="Account locked"))
+    except Exception:
+        pass
 
 
 @router.get(
@@ -140,6 +140,8 @@ def toggle_user_status(
 
     db.commit()
     db.refresh(user)
+    if not user.is_active:
+        _kick_locked_user_realtime(user_id)
     return user
 
 
@@ -154,30 +156,18 @@ def lock_user(
     current_user: User = Depends(role_required("admin")),
     db: Session = Depends(get_db),
 ):
-    """Khoá tài khoản: `is_active=False` + lưu `locked_reason`.
-
-    - Không tìm thấy tài khoản → **404**
-    - Tài khoản đã bị khoá → **400**
-    - Sau khi khoá: đăng nhập → **403**, các API cần token → **403** ngay cả khi token còn hạn.
-    """
+    """Khoá tài khoản: `is_active=False` + lưu `locked_reason`."""
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy tài khoản",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tài khoản")
     if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Không thể khoá chính tài khoản của mình",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể khoá chính tài khoản của mình")
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tài khoản đã bị khoá trước đó",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tài khoản đã bị khoá trước đó")
 
-    return user_crud.lock_user(db, user=user, locked_reason=data.locked_reason)
+    res = user_crud.lock_user(db, user=user, locked_reason=data.locked_reason)
+    _kick_locked_user_realtime(user_id)
+    return res
 
 
 @router.post(

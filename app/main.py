@@ -106,6 +106,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    try:
+        from app.realtime.manager import manager
+        await manager.close_all_shutdown()
+    except Exception:
+        pass
+
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
@@ -178,6 +184,9 @@ app.include_router(career_path.router, prefix="/api")
 app.include_router(career_path.router)
 # Báo cáo vi phạm
 app.include_router(reports.router, prefix="/api")
+# WebSocket & Realtime tickets
+from app.realtime.router import router as realtime_router
+app.include_router(realtime_router)
 
 
 @app.get("/")
