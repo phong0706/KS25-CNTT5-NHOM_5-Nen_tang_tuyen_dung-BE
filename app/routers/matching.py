@@ -117,9 +117,9 @@ def get_matched_jobs(db: Session = Depends(get_db), current_user = Depends(get_c
     jobs = db.execute(text("""
         SELECT j.id, j.title, c.name as company_name, l.name as location_name, j.salary_min, j.salary_max, j.is_salary_negotiable, j.requirements
         FROM jobs j
-        LEFT JOIN companies c ON j.company_id = c.id
+        JOIN companies c ON j.company_id = c.id
         LEFT JOIN meta_locations l ON j.location_id = l.id
-        WHERE j.status = 'published'
+        WHERE j.status = 'published' AND c.is_visible = 1 AND (j.deadline IS NULL OR j.deadline >= CURDATE())
         LIMIT 50
     """)).fetchall()
 

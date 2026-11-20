@@ -1,4 +1,5 @@
 """Router tiện ích tìm kiếm thông minh: gợi ý search, quick filters, saved searches & relaxed search."""
+from datetime import date
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, select, text
@@ -9,6 +10,7 @@ import json
 from app.db.session import get_db
 from app.core.security import get_current_user
 from app.models.application import SavedSearch
+from app.models.company import Company
 from app.models.job import Job, MetaCategory
 
 router = APIRouter(tags=["Smart Search & Insights"])
@@ -87,7 +89,15 @@ def get_relaxed_search(
     nếu không FastAPI sẽ hiểu "relaxed" là job_id và trả 422.
     """
     def _count(**filters) -> int:
-        stmt = select(func.count(func.distinct(Job.id))).where(Job.status == "published")
+        stmt = (
+            select(func.count(func.distinct(Job.id)))
+            .join(Company, Job.company_id == Company.id)
+            .where(
+                Job.status == "published",
+                Company.is_visible == True,  # noqa: E712
+                or_(Job.deadline.is_(None), Job.deadline >= date.today()),
+            )
+        )
         if filters.get("q"):
             stmt = stmt.where(Job.title.ilike(f"%{filters['q']}%"))
         # location / level / work_type lưu dạng chuỗi trực tiếp trên bảng jobs.

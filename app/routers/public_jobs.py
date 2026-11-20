@@ -1,5 +1,5 @@
 """Router công khai cho Trang chủ & Trang tìm việc (tìm kiếm, lọc facets, công ty nổi bật, thống kê)."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import math
 import statistics
 
@@ -30,6 +30,8 @@ from app.schemas.job import (
     PublicJobsSearchOut,
 )
 from app.services.matching import compute_job_match, normalize_skill_list
+from app.services.skills_normalizer import normalize_skills
+from app.services.salary_insight_service import fetch_peers_salaries_map, get_job_salary_insight
 
 router = APIRouter(tags=["Public Jobs"])
 
@@ -52,7 +54,12 @@ def _build_filters(
     skills: str = "",
     exclude: str = "",
 ):
-    conds = [Job.status == "published"]
+    conds = [
+        Job.status == "published",
+        Company.is_visible == True,  # noqa: E712
+        or_(Job.deadline.is_(None), Job.deadline >= date.today()),
+        ~Job.title.regexp_match(r"(?i)^(mmmmmm|test\b|test\s+|.*test\s+job|valid\s+engineer|pending\s+engineer)"),
+    ]
 
     kw = q.strip()
     if kw:
@@ -111,6 +118,7 @@ def _build_filters(
 def _base_joined_query():
     return (
         select(Job)
+        .join(Company, Job.company_id == Company.id)
         .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
         .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
         .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
@@ -157,7 +165,7 @@ def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_
             func.count(func.distinct(Job.id)).label("cnt"),
         )
         .select_from(Job)
-        .outerjoin(Company, Job.company_id == Company.id)
+        .join(Company, Job.company_id == Company.id)
         .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
         .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
         .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
@@ -245,6 +253,8 @@ def search_public_jobs(
             Job,
             Company.name.label("company_name"),
             Company.slug.label("company_slug"),
+            Company.logo_url.label("company_logo"),
+            Company.logo_version.label("company_logo_version"),
             MetaLocation.slug.label("loc_slug"),
             MetaLevel.slug.label("lvl_slug"),
             MetaWorkType.slug.label("wt_slug"),
@@ -322,8 +332,8 @@ def search_public_jobs(
             }
 
     items = []
-    # Bảng cache benchmark lương theo (category_id, level_id).
-    market_benchmarks = _fetch_market_benchmarks(db)
+    # Bảng cache peers salaries theo (category_id, level_id) cho salary insight
+    peers_map = fetch_peers_salaries_map(db)
 
     for r in rows:
         job = r.Job
@@ -335,7 +345,7 @@ def search_public_jobs(
         missing_sk = []
         match_reason = None
         if cand_profile_data:
-            j_skills = job.skills if isinstance(job.skills, list) else []
+            j_skills = normalize_skills(job.skills)
             j_dict = {
                 "skills": j_skills, "level": job.level, "location": job.location,
                 "work_type": job.work_type, "salary_min": job.salary_min, "salary_max": job.salary_max,
@@ -347,17 +357,12 @@ def search_public_jobs(
             missing_sk = m_res["missing_skills"]
             match_reason = m_res["reason"]
 
-        # So sánh lương với thị trường (nếu có category & level)
-        salary_insight = None
-        if job.salary_min or job.salary_max:
-            job_avg = ((job.salary_min or job.salary_max) + (job.salary_max or job.salary_min)) // 2
-            bench = market_benchmarks.get((job.category_id, job.level_id))
-            if bench and bench["count"] >= 5 and bench["avg_salary"]:
-                diff_pct = int(((job_avg - bench["avg_salary"]) / bench["avg_salary"]) * 100)
-                if diff_pct >= 5:
-                    salary_insight = f"Cao hơn thị trường {diff_pct}%"
-                elif diff_pct <= -5:
-                    salary_insight = f"Thấp hơn thị trường {abs(diff_pct)}%"
+        # So sánh lương chuẩn xác với trung vị (>= 5 tin cùng category & level, loại trừ chính tin đó)
+        salary_insight, sample_size = get_job_salary_insight(job, peers_map)
+
+        comp_logo = r.company_logo
+        if comp_logo and r.company_logo_version:
+            comp_logo = f"{comp_logo}?v={r.company_logo_version}"
 
         items.append(
             PublicJobCardOut(
@@ -366,6 +371,7 @@ def search_public_jobs(
                 company_id=job.company_id,
                 company_slug=r.company_slug,
                 company_name=r.company_name or "Doanh nghiệp công nghệ",
+                company_logo=comp_logo,
                 location=job.location,
                 location_slug=r.loc_slug,
                 level=job.level,
@@ -377,7 +383,7 @@ def search_public_jobs(
                 salary_min=job.salary_min,
                 salary_max=job.salary_max,
                 is_salary_negotiable=job.is_salary_negotiable,
-                skills=list(job.skills or []),
+                skills=normalize_skills(job.skills),
                 published_at=job.published_at,
                 created_at=job.created_at,
                 is_saved=job.id in saved_ids,
@@ -385,6 +391,7 @@ def search_public_jobs(
                 matched_skills=matched_sk,
                 missing_skills=missing_sk,
                 salary_insight=salary_insight,
+                salary_insight_sample_size=sample_size,
             )
         )
 
@@ -505,19 +512,34 @@ def get_public_job_detail(
             Job,
             Company.name.label("company_name"),
             Company.slug.label("company_slug"),
+            Company.logo_url.label("company_logo"),
+            Company.logo_version.label("company_logo_version"),
             MetaCategory.name.label("category_name"),
             MetaCategory.slug.label("category_slug"),
         )
         .outerjoin(Company, Job.company_id == Company.id)
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
-        .where(Job.id == job_id, Job.status == "published")
+        .where(Job.id == job_id)
     )
     row = db.execute(stmt).first()
     if not row:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin tuyển dụng")
 
     job = row.Job
-    skills = job.skills if isinstance(job.skills, list) else []
+    if job.status != "published":
+        can_view = user and (user.id == job.employer_id or user.role in ("admin", "operator"))
+        if not can_view:
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin tuyển dụng")
+    skills = normalize_skills(job.skills)
+
+    comp = db.get(Company, job.company_id) if job.company_id else None
+    comp_is_visible = bool(comp.is_visible) if comp else True
+    can_view_private = user and (
+        user.id == job.employer_id
+        or (comp and user.id in (comp.owner_id, comp.employer_id))
+        or user.role in ("admin", "operator")
+    )
+    safe_company_slug = row.company_slug if (comp_is_visible or can_view_private) else None
 
     # Trạng thái cá nhân của khách (nếu đã đăng nhập):
     #   is_saved -> đã lưu tin hay chưa, applied -> đã ứng tuyển hay chưa.
@@ -539,9 +561,9 @@ def get_public_job_detail(
         "id": job.id,
         "title": (job.title or "").replace("[Seed] ", "").replace("[Seed]", ""),
         "company_id": job.company_id or job.employer_id,
-        "company_slug": row.company_slug,
+        "company_slug": safe_company_slug,
         "company_name": row.company_name or "Doanh nghiệp tuyển dụng",
-        "company_logo": None,
+        "company_logo": f"{row.company_logo}?v={row.company_logo_version}" if (row.company_logo and row.company_logo_version) else row.company_logo,
         "location": job.location,
         "type": job.work_type if hasattr(job, "work_type") and job.work_type else "Toàn thời gian",
         "level": job.level or "Tất cả",

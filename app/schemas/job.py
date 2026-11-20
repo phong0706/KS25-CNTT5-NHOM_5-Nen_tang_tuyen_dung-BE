@@ -173,6 +173,8 @@ class PublicJobCardOut(BaseModel):
     company_id: int | None = None
     company_slug: str | None = None
     company_name: str
+    company_logo: str | None = None
+    company_logo_2x: str | None = None
     location: str | None = None
     location_slug: str | None = None
     level: str | None = None
@@ -195,6 +197,13 @@ class PublicJobCardOut(BaseModel):
     missing_skills: list[str] = Field(default_factory=list)
     match_reason: str | None = None
     salary_insight: str | None = None
+    salary_insight_sample_size: int | None = None
+
+    @field_validator("skills", mode="before")
+    @classmethod
+    def validate_skills_list(cls, v):
+        from app.services.skills_normalizer import normalize_skills
+        return normalize_skills(v)
 
 
 class CandidateProfileSummaryOut(BaseModel):
@@ -252,6 +261,9 @@ class FeaturedCompanyOut(BaseModel):
     name: str
     slug: str | None = None
     job_count: int
+    logo_url: str | None = None
+    logo_url_2x: str | None = None
+    logo_version: int = 1
 
 
 class HomeStatsOut(BaseModel):
@@ -384,6 +396,7 @@ class JobSearchOut(BaseModel):
     company_id: int | None = None
     company_name: str
     company_logo: str | None = None
+    company_logo_2x: str | None = None
     industry_id: int | None = None
     industry_name: str
     location_id: int | None = None
