@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.company import Company
+from app.models.company_logo import CompanyLogo
 from app.models.company_verification import CompanyVerification
 from app.models.job import Job
 from app.models.user import User
@@ -60,11 +61,17 @@ def list_admin_company_verifications(
     count_rows = db.execute(
         select(Company.verification_status, func.count(Company.id)).group_by(Company.verification_status)
     ).all()
-    counts = {"all": 0, "chua_xac_minh": 0, "cho_duyet": 0, "da_xac_minh": 0, "tu_choi": 0, "thu_hoi": 0}
+    counts = {"all": 0, "chua_xac_minh": 0, "cho_duyet": 0, "da_xac_minh": 0, "tu_choi": 0, "thu_hoi": 0, "logo_pending": 0}
     for st_key, cnt in count_rows:
         k = st_key or "chua_xac_minh"
         counts[k] = counts.get(k, 0) + int(cnt)
         counts["all"] += int(cnt)
+
+    logo_pending_sub = select(CompanyLogo.company_id).where(CompanyLogo.status == "cho_duyet").distinct()
+    logo_pending_cnt = db.scalar(select(func.count(Company.id)).where(or_(Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))) or 0
+    counts["logo_pending"] = int(logo_pending_cnt)
+    all_pending_cnt = db.scalar(select(func.count(Company.id)).where(or_(Company.verification_status == "cho_duyet", Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))) or 0
+    counts["cho_duyet"] = int(all_pending_cnt)
 
     job_sub = (
         select(Job.company_id, func.count(Job.id).label("cnt"))
@@ -75,9 +82,16 @@ def list_admin_company_verifications(
     stmt = select(Company, func.coalesce(job_sub.c.cnt, 0).label("open_jobs")).outerjoin(
         job_sub, Company.id == job_sub.c.company_id
     )
-    if verif_status in ("chua_xac_minh", "cho_duyet", "da_xac_minh", "tu_choi", "thu_hoi"):
+    if verif_status == "cho_duyet":
+        stmt = stmt.where(or_(Company.verification_status == "cho_duyet", Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))
+    elif verif_status in ("chua_xac_minh", "da_xac_minh", "tu_choi", "thu_hoi"):
         stmt = stmt.where(Company.verification_status == verif_status)
-    if logo_status in ("active", "removed", "missing"):
+
+    if logo_status == "pending":
+        stmt = stmt.where(or_(Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))
+    elif logo_status in ("active", "approved"):
+        stmt = stmt.where(Company.logo_status.in_(["active", "approved"]))
+    elif logo_status in ("removed", "missing"):
         stmt = stmt.where(Company.logo_status == logo_status)
     kw = q.strip()
     if kw:

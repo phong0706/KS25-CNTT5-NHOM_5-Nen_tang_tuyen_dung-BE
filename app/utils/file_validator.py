@@ -2,7 +2,10 @@
 import os
 from pathlib import Path
 
-import magic
+try:
+    import magic
+except ImportError:
+    magic = None
 from fastapi import HTTPException, UploadFile, status
 
 
@@ -65,7 +68,16 @@ class FileValidator:
             )
 
         # 2. Kiểm tra MIME type thực tế bằng python-magic (đọc magic bytes)
-        mime = magic.from_buffer(file_content, mime=True)
+        if magic is not None:
+            mime = magic.from_buffer(file_content, mime=True)
+        elif file_content.startswith(b"%PDF"):
+            mime = "application/pdf"
+        elif file_content.startswith(b"PK\x03\x04"):
+            mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif file_content.startswith(b"\xd0\xcf\x11\xe0"):
+            mime = "application/msword"
+        else:
+            mime = "application/octet-stream"
 
         if mime not in FileValidator.ALLOWED_CV_MIMES:
             raise HTTPException(

@@ -100,6 +100,12 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
             Job,
             Company.name.label("company_name"),
             Company.slug.label("company_slug"),
+            Company.size.label("company_size"),
+            Company.address.label("company_address"),
+            Company.website.label("company_website"),
+            Company.is_verified.label("company_is_verified"),
+            Company.verification_status.label("company_verification_status"),
+            Company.status.label("company_status"),
             case((Company.logo_status.in_(["approved", "active"]), Company.logo_url), else_=None).label("company_logo"),
             MetaCategory.name.label("category_name"),
             MetaCategory.slug.label("category_slug"),
@@ -108,10 +114,7 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
         .where(
             Job.id == job_id,
-            Job.status.in_(["open", "published"]),
             Job.deleted_at.is_(None),
-            or_(Job.deadline.is_(None), Job.deadline >= datetime.now(timezone.utc).date()),
-            or_(Company.verification_status == "da_xac_minh", Company.status == CompanyStatus.VERIFIED, Company.is_verified == True),  # noqa: E712
         )
     )
     row = db.execute(stmt).first()
@@ -119,6 +122,10 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin tuyển dụng")
 
     job = row.Job
+    if job.status not in ("published", "open"):
+        can_view = user and (user.id == job.employer_id or user.role in ("admin", "operator"))
+        if not can_view:
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin tuyển dụng")
     skills = job.skills if isinstance(job.skills, list) else []
     is_saved = False
     applied = False
@@ -161,4 +168,12 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
         "published_at": job.published_at,
         "is_saved": is_saved,
         "applied": applied,
+        "company_is_verified": bool(
+            row.company_is_verified
+            or str(row.company_status or "").upper() in ("VERIFIED", "COMPANYSTATUS.VERIFIED")
+            or row.company_verification_status == "da_xac_minh"
+        ),
+        "company_size": row.company_size,
+        "company_address": row.company_address,
+        "company_website": row.company_website,
     }

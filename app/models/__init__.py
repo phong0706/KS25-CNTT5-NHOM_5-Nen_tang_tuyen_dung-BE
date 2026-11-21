@@ -10,6 +10,7 @@ from app.models.catalog import Industry, Location, Skill  # noqa: F401
 # 2. Công ty (FK → users)
 from app.models.company import Company, CompanyStatus  # noqa: F401
 from app.models.company_verification import CompanyVerification  # noqa: F401
+from app.models.company_logo import CompanyLogo  # noqa: F401
 from app.models.company_follow import CompanyFollow  # noqa: F401
 
 # 3. Hồ sơ ứng viên
@@ -62,6 +63,11 @@ from app.models.career_path import (  # noqa: F401
     CareerRoleSkillWeight,
     CareerRoleStat,
     CareerRoleTransition,
+)
+from app.models.match_score import (  # noqa: F401
+    MatchScore,
+    CandidateMatchingSetting,
+    SkillJobIndex,
 )
 
 

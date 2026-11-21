@@ -54,6 +54,7 @@ def get_application(
         select(
             Application,
             Job.id.label("jid"), Job.title, Company.slug.label("company_slug"), Company.name.label("company_name"),
+            Company.logo_url.label("company_logo"), Company.logo_url_2x.label("company_logo_2x"), Company.logo_version.label("company_logo_version"),
             Job.location, Job.salary_min, Job.salary_max,
             Job.is_salary_negotiable, Job.work_type, Job.status.label("job_status"),
         )
@@ -68,8 +69,13 @@ def get_application(
     app = row[0]
     meta = sm.get(app.status)
 
+    ver = row.company_logo_version
+    logo = f"{row.company_logo}?v={ver}" if row.company_logo and ver else row.company_logo
+    logo_2x = f"{row.company_logo_2x}?v={ver}" if row.company_logo_2x and ver else row.company_logo_2x
+
     job_summary = AppJobSummary(
         id=row.jid, title=row.title, company_slug=row.company_slug, company_name=row.company_name,
+        company_logo=logo, company_logo_2x=logo_2x,
         location=row.location, salary_min=row.salary_min, salary_max=row.salary_max,
         is_salary_negotiable=row.is_salary_negotiable, work_type=row.work_type,
         status=row.job_status,

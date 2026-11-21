@@ -36,6 +36,15 @@ class CVOut(BaseModel):
     size_bytes: int
     is_default: bool
     created_at: datetime
+    mime: str | None = None
+    size: int | None = None
+    uploaded_at: datetime | None = None
+    used_count: int = 0
+    allowed_actions: list[str] = Field(default_factory=list)
+
+
+class CVRenameIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
 
 
 # ── Apply ─────────────────────────────────────────────────────
@@ -67,6 +76,8 @@ class AppJobSummary(BaseModel):
     title: str
     company_slug: str | None = None
     company_name: str | None = None
+    company_logo: str | None = None
+    company_logo_2x: str | None = None
     location: str | None = None
     salary_min: int | None = None
     salary_max: int | None = None

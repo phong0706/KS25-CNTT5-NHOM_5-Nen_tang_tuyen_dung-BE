@@ -15,7 +15,9 @@ class CompanyBase(BaseModel):
     name: str = Field(min_length=1, max_length=255, examples=["FPT Software"])
     logo: str | None = Field(default=None, max_length=500, examples=["https://example.com/logos/fpt.png"])
     logo_url: str | None = Field(default=None, max_length=500, examples=["https://example.com/logos/fpt.png"])
-    logo_status: str = Field(default="missing", max_length=20, examples=["active"])
+    logo_url_2x: str | None = Field(default=None, max_length=500, examples=["https://example.com/logos/fpt_512.png"])
+    logo_status: str | None = Field(default="missing", max_length=20, examples=["active"])
+    pending_logo: dict | None = None
     cover_image: str | None = Field(default=None, max_length=500, examples=["https://example.com/covers/fpt.png"])
     tax_code: str | None = Field(default=None, max_length=50, examples=["0301363748"])
     company_size: str | None = Field(default=None, max_length=50, examples=["1000+"])

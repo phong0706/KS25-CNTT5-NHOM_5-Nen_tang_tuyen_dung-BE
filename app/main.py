@@ -30,14 +30,17 @@ from app.routers import (
     candidate_apply,
     candidate_cover_letters,
     candidate_cv_documents,
+    candidate_cvs,
     candidate_detail,
     candidate_followed_companies,
+    candidate_job_matches,
     candidate_profile,
     candidate_recommended,
     candidate_saved_jobs,
     career_path,
     companies,
     company,
+    company_logos,
     cv,
     employer_applications,
     employer_interviews,
@@ -112,6 +115,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    try:
+        from app.realtime.manager import manager
+        await manager.close_all_shutdown()
+    except Exception:
+        pass
+
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
@@ -124,6 +133,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
+
+# Đăng ký router phục vụ ảnh logo có header bảo mật nosniff trước khi mount StaticFiles
+app.include_router(company_logos.router)
 
 # Phục vụ file tĩnh ở cả /static và /uploads (khớp với đường dẫn trả về của company.py & avatars)
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
@@ -158,9 +170,11 @@ app.include_router(jobs.router, prefix="/api")
 
 app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
+app.include_router(candidate_cvs.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
 app.include_router(candidate_followed_companies.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
+app.include_router(candidate_job_matches.router, prefix="/api")
 app.include_router(candidate_apply.router, prefix="/api")
 app.include_router(candidate_detail.router, prefix="/api")
 app.include_router(nav_meta.router)
@@ -189,6 +203,9 @@ app.include_router(admin_home_companies.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 # Thống kê Dashboard
 app.include_router(statistics.router, prefix="/api")
+# WebSocket & Realtime tickets
+from app.realtime.router import router as realtime_router
+app.include_router(realtime_router)
 
 
 @app.get("/")

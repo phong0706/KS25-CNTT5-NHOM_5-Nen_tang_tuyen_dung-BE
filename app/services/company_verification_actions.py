@@ -1,7 +1,7 @@
 """Các hành động Từ chối, Thu hồi, Đổi MST và Cổng kiểm tra quyền đăng tin (COMPANY_NOT_VERIFIED).
 Giới hạn: <= 200 dòng.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -11,15 +11,10 @@ from app.models.company_verification import CompanyVerification
 from app.models.job import Job
 from app.models.user import User
 from app.services.company_verification_rules import (
-    normalize_and_validate_mst,
-    raise_field_error,
-    send_verification_email_safe,
-    validate_reason_text,
+    normalize_and_validate_mst, raise_field_error, send_verification_email_safe, validate_reason_text,
 )
 from app.services.company_verification_service import (
-    get_latest_verification,
-    serialize_verification,
-    write_verif_audit,
+    get_latest_verification, serialize_verification, write_verif_audit,
 )
 from app.services.notification import NotificationType, create_notification
 
@@ -56,9 +51,16 @@ def reject_verification_request(
     if expected_version is not None:
         conds.append(CompanyVerification.version == expected_version)
 
+    now = datetime.now()
+    if verif.submitted_at and now < verif.submitted_at:
+        raise_field_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "INVALID_DATE_ORDER",
+            "Thời điểm từ chối không được sớm hơn thời điểm gửi hồ sơ.",
+        )
+
     res = db.execute(
         update(CompanyVerification).where(*conds).values(
-            status="tu_choi", reviewed_by=actor.id, reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            status="tu_choi", reviewed_by=actor.id, reviewed_at=now,
             rejection_reason=clean_reason, idempotency_key=idempotency_key, version=CompanyVerification.version + 1,
         )
     )
@@ -109,7 +111,7 @@ def revoke_company_verification(
             conds.append(CompanyVerification.version == expected_version)
         res = db.execute(
             update(CompanyVerification).where(*conds).values(
-                status="thu_hoi", reviewed_by=actor.id, reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                status="thu_hoi", reviewed_by=actor.id, reviewed_at=datetime.now(),
                 rejection_reason=clean_reason, idempotency_key=idempotency_key, version=CompanyVerification.version + 1,
             )
         )

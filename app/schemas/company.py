@@ -15,9 +15,12 @@ class CompanySalaryRangeOut(BaseModel):
 
 
 class CompanyDetailSalaryOut(BaseModel):
-    min: int
-    max: int
-    sample_size: int
+    min: int | None = None
+    max: int | None = None
+    median: int | None = None
+    p25: int | None = None
+    p75: int | None = None
+    sample_size: int = 0
 
 
 class CompanyFacetItemOut(BaseModel):
@@ -47,6 +50,7 @@ class PublicCompanyCardOut(BaseModel):
     slug: str
     name: str
     logo_url: str | None = None
+    logo_url_2x: str | None = None
     industry: CompanyIndustryOut | None = None
     location: str | None = None
     size_range: str | None = None
@@ -72,6 +76,7 @@ class PublicCompanyDetailOut(BaseModel):
     tagline: str | None = None
     description: str | None = None
     logo_url: str | None = None
+    logo_url_2x: str | None = None
     cover_url: str | None = None
     industry: CompanyIndustryOut | None = None
     location: str | None = None
@@ -109,6 +114,7 @@ class CompanyOut(BaseModel):
     employer_id: int
     is_draft: bool
     logo_url: str | None = None
+    logo_url_2x: str | None = None
     cover_url: str | None = None
     description: str | None = None
     industry_id: int | None = None

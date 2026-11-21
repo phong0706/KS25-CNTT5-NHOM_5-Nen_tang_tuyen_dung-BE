@@ -13,6 +13,7 @@ from app.models.job import Job, SavedJob
 from app.models.user import User
 from app.schemas.job import CandidateProfileSummaryOut, PublicJobCardOut, RecommendedJobsOut
 from app.services.matching import compute_job_match, normalize_skill_list
+from app.services.skills_normalizer import normalize_skills
 
 router = APIRouter(prefix="/candidate/jobs/recommended", tags=["Candidate Recommended Jobs"])
 _RECOMMENDED_CACHE: dict[str, tuple[float, list[dict]]] = {}
@@ -83,13 +84,14 @@ def get_recommended_jobs(
             SELECT j.id, j.title, j.company_id, c.slug as company_slug, c.name as company_name, j.location, j.level,
                    j.work_type, j.salary_min, j.salary_max, j.is_salary_negotiable,
                    j.skills, j.deadline, j.published_at, j.created_at
-            FROM jobs j LEFT JOIN companies c ON j.company_id = c.id WHERE j.status = 'published'
+            FROM jobs j JOIN companies c ON j.company_id = c.id 
+            WHERE j.status = 'published' AND c.is_visible = 1 AND (j.deadline IS NULL OR j.deadline >= CURDATE())
         """)).fetchall()
 
         scored_jobs = []
         for r in raw_jobs:
             if r.id in applied_job_ids: continue
-            j_skills = _parse_skills(r.skills)
+            j_skills = normalize_skills(r.skills)
             j_data = {
                 "skills": j_skills, "level": r.level, "location": r.location,
                 "work_type": r.work_type, "salary_min": r.salary_min, "salary_max": r.salary_max,

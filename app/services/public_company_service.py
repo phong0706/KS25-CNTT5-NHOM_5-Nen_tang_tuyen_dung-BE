@@ -116,6 +116,7 @@ def build_company_card(c: Company, ind_slug: str | None, ind_name: str | None, l
     return PublicCompanyCardOut(
         slug=c.slug or str(c.id), name=c.name,
         logo_url=safe_media(c.logo_url if c.logo_status in ("approved", "active") else None),
+        logo_url_2x=safe_media(c.logo_url_2x if c.logo_status in ("approved", "active") else None),
         industry=CompanyIndustryOut(slug=ind_slug, name=ind_name) if ind_slug and ind_name else None,
         location=loc_name or c.address, size_range=c.size_range, is_verified=bool(c.is_verified),
         open_jobs=open_jobs, salary=sal, top_skills=top_skills[:3],

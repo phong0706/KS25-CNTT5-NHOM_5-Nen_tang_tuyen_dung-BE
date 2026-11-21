@@ -282,6 +282,22 @@ def create_notification(
                 pass
         return None
 
+    # Móc đăng ký sự kiện realtime đẩy sau commit (không làm hỏng transaction DB)
+    try:
+        t, b, h = build_notification_content(
+            notification.type, notification.payload_json, notification.title, notification.message, notification.link
+        )
+        cnt = count_unread(db, user_id)
+        from app.realtime.protocol import serialize_realtime_notification
+        from app.realtime.hooks import register_realtime_notification_event, dispatch_realtime_event_safely
+        rt_payload = serialize_realtime_notification(notification, unread_count=cnt, title=t, body=b, href=h)
+        if commit:
+            dispatch_realtime_event_safely(user_id, rt_payload)
+        else:
+            register_realtime_notification_event(db, user_id, rt_payload)
+    except Exception as ex:
+        _log_error(f"Không thể đăng ký sự kiện realtime cho user_id={user_id}: {ex}")
+
     return notification
 
 

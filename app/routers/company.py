@@ -8,6 +8,7 @@ from app.core.security import get_current_user
 from app.crud import company as company_crud
 from app.db.session import get_db
 from app.models.company import Company, CompanyStatus
+from app.models.company_logo import CompanyLogo
 from app.models.user import User
 from app.schemas.company_schema import (
     CompanyProfileUpdate,
@@ -15,7 +16,7 @@ from app.schemas.company_schema import (
     CompanyVerificationDecision,
     CompanyVerificationSubmit,
 )
-from app.services.company_logo_service import validate_and_save_company_logo
+from app.services.company_logo_service import remove_company_logo, upload_company_logo, validate_and_save_company_logo
 from app.services.company_verification_actions import handle_employer_mst_update_if_changed
 
 router = APIRouter(prefix="/company", tags=["Company"])
@@ -62,8 +63,30 @@ def _save_upload(file: UploadFile, subfolder: str) -> str:
     return f"/uploads/{subfolder}/{unique_name}"
 
 
-@router.get("/me", response_model=CompanyResponse, summary="Xem hồ sơ công ty của tôi")
-def get_my_company(company=Depends(_get_my_company)):
+# ------------------------------------------------------------------
+# Endpoints
+# ------------------------------------------------------------------
+
+@router.get(
+    "/me",
+    response_model=CompanyResponse,
+    summary="Xem hồ sơ công ty của tôi",
+)
+def get_my_company(
+    company=Depends(_get_my_company),
+    db: Session = Depends(get_db),
+):
+    """Trả về toàn bộ thông tin hồ sơ công ty của employer đang đăng nhập kèm trạng thái logo."""
+    pending = db.query(CompanyLogo).filter_by(company_id=company.id, status="cho_duyet").order_by(CompanyLogo.id.desc()).first()
+    if pending:
+        company.logo_status = "pending"
+        company.pending_logo = {
+            "id": pending.id,
+            "version": pending.version,
+            "logo_url": f"/uploads/logos/{pending.file_key}?v={pending.version}",
+            "logo_url_2x": f"/uploads/logos/{pending.file_key_2x}?v={pending.version}" if pending.file_key_2x else None,
+            "created_at": pending.created_at.isoformat() if pending.created_at else None,
+        }
     return company
 
 
@@ -79,15 +102,57 @@ def update_my_company(
     return company_crud.update_company(db, company, data)
 
 
-@router.post("/me/logo", response_model=CompanyResponse, summary="Upload logo công ty (PNG/WebP, <= 200 KB)")
+@router.post(
+    "/me/logo",
+    response_model=CompanyResponse,
+    summary="Upload logo công ty (PNG/WebP, <= 200 KB, chờ duyệt)",
+)
 def upload_my_company_logo(
     file: UploadFile = File(..., description="File ảnh PNG hoặc WebP"),
     company=Depends(_get_my_company),
-    current_user: User = Depends(_require_employer),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Upload logo công ty, kiểm tra kích thước/magic bytes, lưu trữ và gửi duyệt admin."""
     logo_url = validate_and_save_company_logo(file, company.id)
-    return company_crud.update_company_logo(db, company, logo_url, current_user.id)
+    comp = company_crud.update_company_logo(db, company, logo_url, current_user.id)
+    try:
+        filename = Path(logo_url).name
+        max_ver = db.query(func.max(CompanyLogo.version)).filter_by(company_id=comp.id).scalar() or comp.logo_version or 0
+        new_logo = CompanyLogo(
+            company_id=comp.id,
+            file_key=filename,
+            file_key_2x=filename,
+            version=max_ver + 1,
+            status="cho_duyet",
+            is_current=False,
+            uploaded_by=current_user.id,
+        )
+        db.add(new_logo)
+        comp.logo_version = max_ver + 1
+        db.commit()
+        db.refresh(comp)
+    except Exception:
+        db.rollback()
+    return comp
+
+
+@router.delete(
+    "/me/logo",
+    summary="Xóa logo công ty của tôi",
+)
+def remove_my_logo(
+    company=Depends(_get_my_company),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    comp = company_crud.remove_company_logo(db, company)
+    return {
+        "status": "success",
+        "message": f"Đã gỡ logo của công ty {comp.name}.",
+        "company_id": comp.id,
+        "logo_version": comp.logo_version,
+    }
 
 
 @router.post("/me/logo/remove", response_model=CompanyResponse, summary="Gỡ logo công ty")
