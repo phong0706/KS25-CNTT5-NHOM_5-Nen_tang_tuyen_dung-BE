@@ -1,0 +1,164 @@
+{
+  "fake_or_suspicious_metrics": [
+    {
+      "file": "frontend/js/calc/calcGrossNet.js",
+      "line": 92,
+      "matched_text": "2024",
+      "snippet": "effectiveFrom: rules?.effective_from || \"2024-07-01\",",
+      "issue": "Old year ('2024') in user-facing UI"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 10,
+      "matched_text": "Tháng 04/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 04/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 30,
+      "matched_text": "Tháng 04/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 04/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 40,
+      "matched_text": "Tháng 05/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 05/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 50,
+      "matched_text": "Tháng 04/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 04/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 60,
+      "matched_text": "Tháng 05/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 05/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 70,
+      "matched_text": "Tháng 05/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 05/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 80,
+      "matched_text": "Tháng 04/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 04/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 90,
+      "matched_text": "Tháng 05/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 05/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/config/featureHighlights.js",
+      "line": 100,
+      "matched_text": "Tháng 04/2026",
+      "snippet": "eta: \"Dự kiến: Tháng 04/2026\",",
+      "issue": "Future placeholder date ('tháng 04/2026' or 'tháng 05/2026')"
+    },
+    {
+      "file": "frontend/js/pages/grossNetPage.js",
+      "line": 31,
+      "matched_text": "2024",
+      "snippet": "if (badgeSource) badgeSource.textContent = \"Áp dụng theo Nghị định 73/2024/NĐ-CP & Luật Thuế TNCN\";",
+      "issue": "Old year ('2024') in user-facing UI"
+    }
+  ],
+  "dead_forms": [
+    {
+      "file": "frontend/js/pages/employerApplications.js",
+      "line": 43,
+      "form_id": null,
+      "snippet": "<form style=\"display:flex; flex-direction:column; gap:12px;\">",
+      "issue": "Form has no action attribute and no JS event handler found"
+    },
+    {
+      "file": "frontend/js/pages/employerApplications.js",
+      "line": 70,
+      "form_id": null,
+      "snippet": "<form style=\"display:flex; flex-direction:column; gap:12px;\">",
+      "issue": "Form has no action attribute and no JS event handler found"
+    },
+    {
+      "file": "frontend/pages/employer/job-form.html",
+      "line": 48,
+      "form_id": "ejf-form",
+      "snippet": "<form id=\"ejf-form\" class=\"ejf-form-card\" novalidate>",
+      "issue": "Form has no action attribute and no JS event handler found"
+    },
+    {
+      "file": "frontend/pages/tools/interview-questions.html",
+      "line": 74,
+      "form_id": "iq-filter-form",
+      "snippet": "<form class=\"iq-filter-box\" id=\"iq-filter-form\" onsubmit=\"event.preventDefault()",
+      "issue": "Form has no action attribute and no JS event handler found"
+    }
+  ],
+  "hardcoded_progress_bars": [
+    {
+      "file": "frontend/js/components/categoryGrid.js",
+      "line": 24,
+      "width_percent": 70,
+      "snippet": ".map(() => `<div class=\"category-card\" aria-hidden=\"true\"><div class=\"job-skeleton-pulse\" style=\"wid",
+      "issue": "Hardcoded inline progress width: 70%"
+    },
+    {
+      "file": "frontend/js/components/heroWorkbench.js",
+      "line": 32,
+      "width_percent": 70,
+      "snippet": "<div class=\"wb-skeleton-box wb-sk-title\" style=\"width:70%;height:14px;\"></div>",
+      "issue": "Hardcoded inline progress width: 70%"
+    },
+    {
+      "file": "frontend/js/components/heroWorkbench.js",
+      "line": 34,
+      "width_percent": 40,
+      "snippet": "<div class=\"wb-skeleton-box wb-sk-meta\" style=\"width:40%;height:11px;\"></div>",
+      "issue": "Hardcoded inline progress width: 40%"
+    },
+    {
+      "file": "frontend/js/components/jobCard.js",
+      "line": 134,
+      "width_percent": 70,
+      "snippet": "const card = `<div class=\"job-grid-card job-skeleton-card\" aria-hidden=\"true\"><div class=\"job-skelet",
+      "issue": "Hardcoded inline progress width: 70%"
+    },
+    {
+      "file": "frontend/js/components/jobRow.js",
+      "line": 42,
+      "width_percent": 55,
+      "snippet": "<div class=\"ej-skeleton-line\" style=\"width: 55%; height: 18px;\"></div>",
+      "issue": "Hardcoded inline progress width: 55%"
+    },
+    {
+      "file": "frontend/js/components/jobRow.js",
+      "line": 45,
+      "width_percent": 42,
+      "snippet": "<div class=\"ej-skeleton-line\" style=\"width: 42%; height: 14px; margin-top: 6px;\"></div>",
+      "issue": "Hardcoded inline progress width: 42%"
+    },
+    {
+      "file": "frontend/js/pages/interviewPage.js",
+      "line": 86,
+      "width_percent": 30,
+      "snippet": "host.innerHTML = Array(3).fill('<div class=\"q-card\" style=\"padding:16px;\"><div class=\"iq-skeleton\" s",
+      "issue": "Hardcoded inline progress width: 30%"
+    }
+  ],
+  "untranslated_english_text": [],
+  "placeholder_features": []
+}

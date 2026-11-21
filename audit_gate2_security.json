@@ -1,0 +1,315 @@
+{
+  "2.1_authentication": {
+    "expired_token_status": 401,
+    "expired_token_pass": true,
+    "tampered_token_status": 401,
+    "tampered_token_pass": true,
+    "algorithm_none_status": 401,
+    "algorithm_none_rejected": true,
+    "passwordless_status": 401,
+    "passwordless_blocked": true,
+    "user_model_has_token_version": true
+  },
+  "2.2_rbac_matrix": [
+    {
+      "method": "GET",
+      "path": "/api/admin/audit-logs",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "employer": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "admin": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/companies",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "employer": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "admin": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/verifications",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 404,
+          "passed": false
+        },
+        "candidate": {
+          "expected": 403,
+          "actual": 404,
+          "passed": false
+        },
+        "employer": {
+          "expected": 403,
+          "actual": 404,
+          "passed": false
+        },
+        "admin": {
+          "expected": 200,
+          "actual": 404,
+          "passed": false
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/employer/jobs",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "employer": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "admin": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/employer/applications",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "employer": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "admin": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/candidate/applications",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "employer": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "admin": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/candidate/cvs",
+      "roles": {
+        "guest": {
+          "expected": 401,
+          "actual": 401,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "employer": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        },
+        "admin": {
+          "expected": 403,
+          "actual": 403,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs",
+      "roles": {
+        "guest": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "employer": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "admin": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/companies",
+      "roles": {
+        "guest": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "candidate": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "employer": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        "admin": {
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        }
+      }
+    }
+  ],
+  "2.3_idor": {
+    "candidate_cross_cv": "No CV found for Candidate B",
+    "candidate_cross_app": "No application found for Candidate B",
+    "employer_cross_job_put_status": 403,
+    "job_idor_protected": true
+  },
+  "2.4_privilege_escalation": {
+    "role_tamper_attempt_status": 405,
+    "role_after_tamper": "candidate",
+    "role_tamper_blocked": true,
+    "employer_self_approve_status": 405,
+    "employer_self_approve_blocked": false
+  },
+  "2.5_injections": {
+    "sqli_results": [
+      {
+        "payload": "' OR '1'='1",
+        "q_status": 200,
+        "sort_status": 200,
+        "loc_status": 200,
+        "safe": true
+      },
+      {
+        "payload": "1; DROP TABLE fake_test_table--",
+        "q_status": 200,
+        "sort_status": 200,
+        "loc_status": 200,
+        "safe": true
+      },
+      {
+        "payload": "test' UNION SELECT 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20-- ",
+        "q_status": 200,
+        "sort_status": 200,
+        "loc_status": 200,
+        "safe": true
+      }
+    ],
+    "xss_verbatim_storage_required": true
+  },
+  "2.6_file_upload_security": {
+    "fake_pdf_mz_status": 422,
+    "fake_pdf_mz_blocked": true,
+    "svg_upload_status": 422,
+    "svg_upload_blocked": true,
+    "path_traversal_status": 201,
+    "static_cv_direct_access_status": 404,
+    "static_cv_forbidden_or_404": true
+  },
+  "2.7_data_exposure": {
+    "jobs_leaks_password_hash": false,
+    "jobs_leaks_email": false,
+    "comp_leaks_password_hash": false,
+    "error_leaks_traceback": false
+  },
+  "2.9_config_and_cors": {
+    "cors_configured": "",
+    "cors_has_5501": false,
+    "cors_has_5502": false,
+    "cors_has_wildcard": false,
+    "cors_safe": true,
+    "env_tracked_by_git": false
+  },
+  "2.10_git_history": {
+    "git_history_jwt_secret_scan_exit": 0,
+    "git_history_has_jwt_secret_commits": false
+  }
+}

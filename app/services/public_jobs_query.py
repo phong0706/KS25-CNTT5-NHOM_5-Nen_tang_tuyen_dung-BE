@@ -11,6 +11,7 @@ from app.models.job import Job, MetaCategory, MetaLevel, MetaLocation, MetaWorkT
 from app.models.user import User
 from app.schemas.job import FacetItemOut, PublicJobCardOut, PublicJobsFacetsOut, PublicJobsSearchOut
 from app.services.matching import compute_job_match
+from app.services.salary_insight_service import fetch_peers_salaries_map, get_job_salary_insight
 
 
 def _split_csv(val: str) -> list[str]:
@@ -58,6 +59,21 @@ def build_public_job_filters(*, q: str = "", location: str = "", level: str = ""
                 func.lower(cast(Job.skills, String(2000))).like(f'%"{sk_norm}"%'),
             ))
     return conds
+
+
+def count_public_jobs(db: Session, **kwargs) -> int:
+    conds = build_public_job_filters(**kwargs)
+    stmt = (
+        select(func.count(func.distinct(Job.id)))
+        .select_from(Job)
+        .outerjoin(Company, Job.company_id == Company.id)
+        .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
+        .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
+        .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
+        .outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
+        .where(*conds)
+    )
+    return int(db.scalar(stmt) or 0)
 
 
 def _fetch_market_benchmarks(db: Session) -> dict:
@@ -123,7 +139,16 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id).outerjoin(MetaCategory, Job.category_id == MetaCategory.id).where(*conds)
     ) or 0)
     total_pages = max(1, math.ceil(total / page_size))
-    safe_page = min(page, total_pages)
+    if page > total_pages:
+        facets = PublicJobsFacetsOut(
+            location=_compute_facet(db, MetaLocation, Job.location_id, f_kwargs, "location"),
+            level=_compute_facet(db, MetaLevel, Job.level_id, f_kwargs, "level"),
+            type=_compute_facet(db, MetaWorkType, Job.work_type_id, f_kwargs, "type"),
+            category=_compute_facet(db, MetaCategory, Job.category_id, f_kwargs, "category"),
+        )
+        return PublicJobsSearchOut(items=[], total=total, page=page, page_size=page_size, total_pages=total_pages, facets=facets)
+
+    safe_page = page
     offset = (safe_page - 1) * page_size
 
     cand_profile_data = _load_candidate_profile(db, current_user)
@@ -176,21 +201,14 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         rows = db.execute(stmt.offset(offset).limit(page_size)).all()
 
     saved_ids = set(db.scalars(select(SavedJob.job_id).where(SavedJob.user_id == current_user.id, SavedJob.job_id.in_([r.Job.id for r in rows]))).all()) if (current_user and rows) else set()
-    benchmarks = _fetch_market_benchmarks(db)
+    peers_salaries_map = fetch_peers_salaries_map(db)
     items = []
     for r in rows:
         job = r.Job
         m_res = match_cache.get(job.id)
         if not m_res and cand_profile_data:
             m_res = compute_job_match(cand_profile_data, {"skills": job.skills if isinstance(job.skills, list) else [], "level": job.level, "location": job.location, "work_type": job.work_type, "salary_min": job.salary_min, "salary_max": job.salary_max, "is_salary_negotiable": bool(job.is_salary_negotiable)})
-        sal_insight = None
-        if job.salary_min or job.salary_max:
-            job_avg = ((job.salary_min or job.salary_max) + (job.salary_max or job.salary_min)) // 2
-            b = benchmarks.get((job.category_id, job.level_id))
-            if b and b["count"] >= 5 and b["avg_salary"]:
-                diff = int(((job_avg - b["avg_salary"]) / b["avg_salary"]) * 100)
-                if diff >= 5: sal_insight = f"Cao hơn thị trường {diff}%"
-                elif diff <= -5: sal_insight = f"Thấp hơn thị trường {abs(diff)}%"
+        sal_insight, _ = get_job_salary_insight(job, peers_salaries_map)
         items.append(PublicJobCardOut(
             id=job.id, title=(job.title or "").replace("[Seed]", "").strip(), company_id=job.company_id, company_slug=r.company_slug, company_name=r.company_name or "Doanh nghiệp công nghệ",
             location=job.location, location_slug=r.loc_slug, level=job.level, level_slug=r.lvl_slug, work_type=job.work_type, work_type_slug=r.wt_slug,

@@ -114,6 +114,7 @@ def build_company_card(c: Company, ind_slug: str | None, ind_name: str | None, l
     if agg_row and int(agg_row.salary_sample_size or 0) > 0 and agg_row.min_salary is not None and agg_row.max_salary is not None:
         sal = CompanySalaryRangeOut(min=int(agg_row.min_salary), max=int(agg_row.max_salary))
     return PublicCompanyCardOut(
+        id=c.id,
         slug=c.slug or str(c.id), name=c.name,
         logo_url=safe_media(c.logo_url if c.logo_status in ("approved", "active") else None),
         logo_url_2x=safe_media(c.logo_url_2x if c.logo_status in ("approved", "active") else None),

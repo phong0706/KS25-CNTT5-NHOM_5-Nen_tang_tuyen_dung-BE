@@ -1,0 +1,199 @@
+{
+  "1.2_orphan_data": {
+    "jobs_null_company_count": 16,
+    "jobs_null_company_sample": [
+      {
+        "id": 24,
+        "title": "Scrum Master / Agile Coach",
+        "status": "closed",
+        "employer_id": 24
+      },
+      {
+        "id": 23,
+        "title": "IT Business Analyst (ERP & CRM)",
+        "status": "closed",
+        "employer_id": 24
+      },
+      {
+        "id": 22,
+        "title": "Senior Vue.js Engineer (Dashboard Analytics)",
+        "status": "closed",
+        "employer_id": 24
+      },
+      {
+        "id": 13,
+        "title": "AI / Machine Learning Engineer (NLP & Matching)",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 14,
+        "title": "Product Manager (HR Tech Platform)",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 15,
+        "title": "Junior Node.js Backend Developer",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 16,
+        "title": "Security Engineer (AppSec & Pentest)",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 17,
+        "title": "Solutions Architect (Cloud & Enterprise)",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 18,
+        "title": "Next.js Frontend Engineer (SEO & Performance)",
+        "status": "draft",
+        "employer_id": 24
+      },
+      {
+        "id": 19,
+        "title": "Database Administrator (MySQL / PostgreSQL)",
+        "status": "draft",
+        "employer_id": 24
+      }
+    ],
+    "jobs_invalid_company_count": 0,
+    "jobs_invalid_company_sample": [],
+    "companies_invalid_owner_count": 0,
+    "apps_cv_mismatch_count": 0,
+    "apps_cv_mismatch_sample": [],
+    "cv_multi_users_count": 0,
+    "cv_multi_users_sample": []
+  },
+  "1.3_business_rules": {
+    "multi_active_logos_count": 0,
+    "multi_active_logos_sample": [],
+    "jobs_date_inversion_count": 0,
+    "verif_date_inversion_count": 0,
+    "verif_date_inversion_sample": [],
+    "jobs_invalid_status_count": 8,
+    "negative_numeric_fields_count": 0
+  },
+  "1.4_test_and_junk_data": {
+    "test_jobs_count": 9,
+    "test_jobs_sample": [
+      {
+        "id": 6,
+        "title": "Junior QA / Automation Tester (Playwright)",
+        "status": "published",
+        "created_at": "2026-11-02 18:15:55",
+        "employer_id": 24
+      },
+      {
+        "id": 16,
+        "title": "Security Engineer (AppSec & Pentest)",
+        "status": "draft",
+        "created_at": "2026-11-03 18:15:55",
+        "employer_id": 24
+      },
+      {
+        "id": 26,
+        "title": "Manual QA Tester",
+        "status": "draft",
+        "created_at": "2026-11-10 18:15:55",
+        "employer_id": 25
+      },
+      {
+        "id": 84,
+        "title": "Senior QA Tester (Performance & Security)",
+        "status": "published",
+        "created_at": "2026-11-07 11:55:38",
+        "employer_id": 24
+      },
+      {
+        "id": 85,
+        "title": "QC / Tester (Manual to Automation)",
+        "status": "published",
+        "created_at": "2026-11-11 11:55:38",
+        "employer_id": 24
+      },
+      {
+        "id": 86,
+        "title": "Automation Test Lead",
+        "status": "published",
+        "created_at": "2026-11-08 11:55:38",
+        "employer_id": 24
+      },
+      {
+        "id": 87,
+        "title": "QA Engineer (API & Mobile Testing)",
+        "status": "published",
+        "created_at": "2026-11-13 11:55:38",
+        "employer_id": 24
+      },
+      {
+        "id": 132,
+        "title": "Penetration Tester",
+        "status": "published",
+        "created_at": "2026-11-10 16:47:28",
+        "employer_id": 24
+      },
+      {
+        "id": 586,
+        "title": "Test Job For CV Protect",
+        "status": "draft",
+        "created_at": "2026-11-21 13:09:20",
+        "employer_id": 1095
+      }
+    ],
+    "test_companies_count": 0,
+    "test_companies_sample": [],
+    "test_accounts_count": 117,
+    "test_accounts_by_role": {
+      "employer": 56,
+      "candidate": 61
+    }
+  },
+  "1.5_duplicates": {
+    "duplicate_emails_count": 0,
+    "duplicate_tax_codes_count": 0,
+    "duplicate_tax_codes_sample": []
+  },
+  "1.6_seed_scan": [
+    {
+      "file": "sql/01_schema.sql",
+      "bcrypt_hashes_count": 0,
+      "bcrypt_hash_sample_masked": [],
+      "emails_count": 0,
+      "email_domains": [],
+      "hex_tokens_count": 0,
+      "cv_paths_count": 0,
+      "cv_paths_sample": [],
+      "test_names_count": 0
+    },
+    {
+      "file": "sql/02_seed_demo.sql",
+      "bcrypt_hashes_count": 22,
+      "bcrypt_hash_sample_masked": [
+        "$2b$12$fTG...",
+        "$2b$12$U5o...",
+        "$2b$12$Sih..."
+      ],
+      "emails_count": 17,
+      "email_domains": [
+        "gmail.com"
+      ],
+      "hex_tokens_count": 2,
+      "cv_paths_count": 59,
+      "cv_paths_sample": [
+        "'CV_PhamMinhDuc_Fullstack_2026.pdf'",
+        "'CV_PhamMinhDuc_Backend_Python.pdf'",
+        "'CV_PhamMinhDuc_English.pdf'",
+        "'CV_PhamMinhDuc_Fullstack_2026.pdf'",
+        "'CV_PhamMinhDuc_Backend_Python.pdf'"
+      ],
+      "test_names_count": 0
+    }
+  ]
+}

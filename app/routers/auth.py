@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import auth_rate_limiter
 from app.core.security import create_access_token, get_current_user, hash_password, verify_password
 from app.crud import company as company_crud
 from app.crud import user as user_crud
@@ -62,16 +63,26 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     response_model=TokenOut,
     summary="Đăng nhập, nhận JWT",
 )
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """Đăng nhập bằng email + mật khẩu, nhận `access_token` (JWT).
 
     Sau đó gắn token vào header mọi request cần xác thực:
     `Authorization: Bearer <access_token>`
     """
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = auth_rate_limiter.check_login_allowed(client_ip, data.email)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau {retry_after} giây.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = user_crud.get_user_by_email(db, data.email)
 
     # Không tìm thấy hoặc sai mật khẩu → cùng báo lỗi chung (tránh lộ thông tin)
     if not user or not verify_password(data.password, user.password):
+        auth_rate_limiter.record_login_failure(client_ip, data.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email hoặc mật khẩu không đúng",
@@ -83,6 +94,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             detail="Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.",
         )
 
+    auth_rate_limiter.record_login_success(client_ip, data.email)
     token = create_access_token(user.id, user.role, getattr(user, "token_version", 1))
     return {"access_token": token, "token_type": "bearer"}
 
@@ -110,9 +122,18 @@ def forgot_password(
 )
 def reset_password(
     data: ResetPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Xác thực mã 6 số và cập nhật mật khẩu mới, hủy toàn bộ phiên cũ."""
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = auth_rate_limiter.check_reset_password_allowed(client_ip, max_requests=10)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Quá nhiều yêu cầu thử mã đặt lại mật khẩu. Vui lòng đợi {retry_after} giây.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return reset_password_with_code(db, data.email, data.code, data.new_password)
 
 

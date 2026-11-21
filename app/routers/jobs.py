@@ -190,7 +190,7 @@ def search_jobs(
 
 
 @router.get(
-    "/jobs",
+    "/v1/open-jobs",
     response_model=list[JobSearchOut],
     summary="Danh sách việc làm đang mở (tương thích với FE & script test)",
 )
@@ -239,9 +239,9 @@ def list_open_jobs(
 
 
 @router.get(
-    "/jobs/{job_id}",
+    "/v1/jobs/{job_id}",
     response_model=JobOut,
-    summary="Xem chi tiết 1 tin tuyển dụng",
+    summary="Xem chi tiết 1 tin tuyển dụng (v1 internal/legacy)",
 )
 def get_job_detail(
     job_id: int,

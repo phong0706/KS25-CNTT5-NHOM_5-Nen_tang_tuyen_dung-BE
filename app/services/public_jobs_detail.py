@@ -141,6 +141,7 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
 
     return {
         "id": job.id,
+        "status": job.status,
         "title": (job.title or "").replace("[Seed] ", "").replace("[Seed]", ""),
         "company_id": job.company_id or job.employer_id,
         "company_slug": row.company_slug,

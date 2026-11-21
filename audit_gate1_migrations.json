@@ -1,0 +1,58 @@
+{
+  "scanned_files": 17,
+  "files_with_drop_or_truncate": [
+    {
+      "file": "scripts/migrate_company_logos_schema.py",
+      "matches": [
+        "TRUNCATE"
+      ]
+    },
+    {
+      "file": "scripts/migrate_home_config_tables.py",
+      "matches": [
+        "TRUNCATE"
+      ]
+    },
+    {
+      "file": "scripts/migrate_match_scores_schema.py",
+      "matches": [
+        "TRUNCATE"
+      ]
+    }
+  ],
+  "files_without_rollback": [
+    "app/db/migrations/job_moderation_migration.py",
+    "app/db/migrations/job_soft_delete_migration.py",
+    "scripts/migrate_company_logos_schema.py",
+    "scripts/migrate_company_verification.py",
+    "scripts/migrate_home_config_tables.py",
+    "scripts/migrate_logo_2x.py",
+    "scripts/migrate_match_scores_schema.py",
+    "scripts/migrate_notifications.py",
+    "scripts/migrate_public_api_schema.py",
+    "sql/companies_profile_migration.sql",
+    "sql/company_verification_migration.sql",
+    "sql/migrate_company_verification.sql",
+    "sql/migrate_reports_schema.sql",
+    "sql/patch_forgot_password.sql",
+    "sql/patch_mega_menu.sql",
+    "sql/patch_notifications.sql"
+  ],
+  "idempotence_results": [
+    {
+      "migration": "job_soft_delete_migration",
+      "idempotent": true,
+      "error": null
+    },
+    {
+      "migration": "job_moderation_migration",
+      "idempotent": false,
+      "error": "(pymysql.err.OperationalError) (1824, \"Failed to open the referenced table 'users'\")\n[SQL: \n        CREATE TABLE IF NOT EXISTS job_status_history (\n            id INT AUTO_INCREMENT PRIMARY KEY,\n            job_id INT NOT NULL,\n            from_status VARCHAR(32) NOT NULL,\n            to_status VARCHAR(32) NOT NULL,\n            changed_by INT NOT NULL,\n            reason TEXT NULL,\n            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n            INDEX idx_job_status_history_job_created (job_id, created_at),\n            CONSTRAINT fk_jsh_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,\n            CONSTRAINT fk_jsh_user FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE CASCADE\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n        ]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+    },
+    {
+      "migration": "migrate_home_config_tables",
+      "idempotent": false,
+      "error": "migrate_home_config() takes 0 positional arguments but 1 was given"
+    }
+  ]
+}

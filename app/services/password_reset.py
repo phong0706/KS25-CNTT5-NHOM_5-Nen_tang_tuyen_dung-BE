@@ -110,10 +110,14 @@ def reset_password_with_code(
     db: Session, email: str, code: str, new_password: str
 ) -> dict:
     """Xác nhận mã và đặt lại mật khẩu mới, hủy toàn bộ phiên cũ."""
-    if len(new_password) < 6:
+    from app.schemas.auth import validate_password_strength
+
+    try:
+        validate_password_strength(new_password)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "WEAK_PASSWORD", "message": "Mật khẩu mới phải có ít nhất 6 ký tự."},
+            detail={"code": "WEAK_PASSWORD", "message": str(e)},
         )
 
     clean_email = email.strip().lower()

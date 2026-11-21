@@ -47,6 +47,7 @@ class CompanyTopSkillOut(BaseModel):
 
 
 class PublicCompanyCardOut(BaseModel):
+    id: int | None = None
     slug: str
     name: str
     logo_url: str | None = None
