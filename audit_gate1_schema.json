@@ -1,0 +1,77 @@
+{
+  "missing_tables_in_db": [],
+  "missing_tables_in_orm": [
+    "calc_rules",
+    "candidate_cover_letters",
+    "company_review_requests",
+    "cv_templates",
+    "home_config_audit",
+    "home_featured_companies",
+    "home_salary_settings",
+    "home_salary_skill_overrides",
+    "interview_practice",
+    "interview_questions",
+    "skill_aliases"
+  ],
+  "column_mismatches": [
+    {
+      "table": "skills",
+      "column": "canonical_name",
+      "issue": "Present in MySQL table (type: VARCHAR(100) COLLATE \"utf8mb4_unicode_ci\") but NOT mapped in ORM model"
+    },
+    {
+      "table": "skills",
+      "column": "created_at",
+      "issue": "Present in MySQL table (type: TIMESTAMP) but NOT mapped in ORM model"
+    },
+    {
+      "table": "company_verifications",
+      "column": "pending_company_lock",
+      "issue": "Present in MySQL table (type: INTEGER) but NOT mapped in ORM model"
+    },
+    {
+      "table": "saved_searches",
+      "column": "last_viewed_job_id",
+      "issue": "Present in MySQL table (type: INTEGER) but NOT mapped in ORM model"
+    },
+    {
+      "table": "saved_searches",
+      "column": "updated_at",
+      "issue": "Present in MySQL table (type: TIMESTAMP) but NOT mapped in ORM model"
+    },
+    {
+      "table": "jobs",
+      "column": "industry_id",
+      "issue": "Present in MySQL table (type: INTEGER) but NOT mapped in ORM model"
+    },
+    {
+      "table": "jobs",
+      "column": "job_type",
+      "issue": "Present in MySQL table (type: VARCHAR(20) COLLATE \"utf8mb4_unicode_ci\") but NOT mapped in ORM model"
+    },
+    {
+      "table": "jobs",
+      "column": "is_negotiable",
+      "issue": "Present in MySQL table (type: TINYINT) but NOT mapped in ORM model"
+    },
+    {
+      "table": "jobs",
+      "column": "currency",
+      "issue": "Present in MySQL table (type: VARCHAR(10) COLLATE \"utf8mb4_unicode_ci\") but NOT mapped in ORM model"
+    },
+    {
+      "table": "jobs",
+      "column": "posted_by",
+      "issue": "Present in MySQL table (type: INTEGER) but NOT mapped in ORM model"
+    }
+  ],
+  "fk_mismatches": [],
+  "raw_sql_column_errors": [
+    {
+      "file": "app/services/career_roadmap_resolver.py",
+      "line": 76,
+      "snippet": "cs_rows = db.execute(text(\"SELECT cs.skill_name FROM candidate_skills cs JOIN candidate_profiles cp ON cs.profile_id = cp.id WHERE cp.user_id = :uid\"), {\"uid\": user_id}).fetchall()",
+      "issue": "References user_id on candidate_skills (which only has candidate_id or profile_id)"
+    }
+  ]
+}

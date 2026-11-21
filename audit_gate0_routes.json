@@ -1,0 +1,42 @@
+{
+  "total_routes": 270,
+  "unique_endpoints": 267,
+  "duplicates": {
+    "GET /api/companies/featured": [
+      {
+        "name": "list_featured_companies",
+        "endpoint": "list_featured_companies",
+        "module": "app.routers.companies"
+      },
+      {
+        "name": "list_featured_companies",
+        "endpoint": "list_featured_companies",
+        "module": "app.routers.public_jobs"
+      }
+    ],
+    "GET /api/jobs": [
+      {
+        "name": "search_public_jobs",
+        "endpoint": "search_public_jobs",
+        "module": "app.routers.public_jobs"
+      },
+      {
+        "name": "list_open_jobs",
+        "endpoint": "list_open_jobs",
+        "module": "app.routers.jobs"
+      }
+    ],
+    "GET /api/jobs/{job_id}": [
+      {
+        "name": "get_public_job_detail",
+        "endpoint": "get_public_job_detail",
+        "module": "app.routers.public_jobs"
+      },
+      {
+        "name": "get_job_detail",
+        "endpoint": "get_job_detail",
+        "module": "app.routers.jobs"
+      }
+    ]
+  }
+}
