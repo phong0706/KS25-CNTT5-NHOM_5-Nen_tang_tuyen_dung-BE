@@ -123,7 +123,16 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id).outerjoin(MetaCategory, Job.category_id == MetaCategory.id).where(*conds)
     ) or 0)
     total_pages = max(1, math.ceil(total / page_size))
-    safe_page = min(page, total_pages)
+    if page > total_pages:
+        facets = PublicJobsFacetsOut(
+            location=_compute_facet(db, MetaLocation, Job.location_id, f_kwargs, "location"),
+            level=_compute_facet(db, MetaLevel, Job.level_id, f_kwargs, "level"),
+            type=_compute_facet(db, MetaWorkType, Job.work_type_id, f_kwargs, "type"),
+            category=_compute_facet(db, MetaCategory, Job.category_id, f_kwargs, "category"),
+        )
+        return PublicJobsSearchOut(items=[], total=total, page=page, page_size=page_size, total_pages=total_pages, facets=facets)
+
+    safe_page = page
     offset = (safe_page - 1) * page_size
 
     cand_profile_data = _load_candidate_profile(db, current_user)
