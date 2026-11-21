@@ -122,7 +122,14 @@ class ConnectionManager:
             except asyncio.QueueFull:
                 logger.warning("Queue đầy cho user %s, đóng kết nối 1013 (Slow consumer)", user_id)
                 c.is_closed = True
-                asyncio.create_task(self._close_slow_conn(c))
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._close_slow_conn(c))
+                except RuntimeError:
+                    try:
+                        asyncio.run(self._close_slow_conn(c))
+                    except Exception:
+                        pass
         return delivered
 
     async def _close_slow_conn(self, conn: WebSocketConnection):

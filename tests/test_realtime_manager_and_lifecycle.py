@@ -23,10 +23,12 @@ from app.realtime.tickets import ticket_store
 @pytest.fixture(autouse=True)
 def reset_state():
     ticket_store.clear()
+    ticket_store.max_requests = 100
     manager.heartbeat_interval = 25.0
     manager.heartbeat_timeout = 60.0
     yield
     ticket_store.clear()
+    ticket_store.max_requests = 10
     manager.heartbeat_interval = 25.0
     manager.heartbeat_timeout = 60.0
 
@@ -126,7 +128,9 @@ def test_ws_no_leak_after_rapid_connect_disconnect(users_fixture):
     initial_total = manager.total_connections
 
     for _ in range(50):
-        ticket_str, _ = ticket_store.issue_ticket(cand.id, cand.role, ttl=30.0)
+        ticket_str, _ = ticket_store.issue_ticket(
+            cand.id, cand.role, token_ver=getattr(cand, "token_version", 1), ttl=30.0
+        )
         with cl.websocket_connect(f"/ws/notifications?ticket={ticket_str}", headers=origin) as ws:
             _ = _recv(ws)
 
