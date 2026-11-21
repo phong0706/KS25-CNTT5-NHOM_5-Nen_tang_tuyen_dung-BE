@@ -45,11 +45,11 @@ def evaluate_salary_insight(
         return None, sample_size
 
     diff_pct = int(round(((job_salary - med) / med) * 100))
-    if diff_pct >= 5:
-        return f"Cao hơn {diff_pct}% so với tin cùng lĩnh vực trên TechRecruit", sample_size
-    elif diff_pct <= -5:
-        return f"Thấp hơn {abs(diff_pct)}% so với tin cùng lĩnh vực trên TechRecruit", sample_size
-    return "Tương đương mức phổ biến trên TechRecruit", sample_size
+    if abs(diff_pct) < 5:
+        return None, sample_size
+
+    sign = "+" if diff_pct > 0 else ""
+    return f"So với {sample_size} tin cùng lĩnh vực và cấp bậc: {sign}{diff_pct}%", sample_size
 
 
 def fetch_peers_salaries_map(db: Session, today: Optional[date] = None) -> Dict[Tuple[int, int], List[Tuple[int, float]]]:

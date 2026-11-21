@@ -11,7 +11,8 @@ from app.db.session import get_db
 from app.core.security import get_current_user
 from app.models.application import SavedSearch
 from app.models.company import Company
-from app.models.job import Job, MetaCategory
+from app.models.job import Job, MetaCategory, MetaSkill
+from app.services.public_jobs_query import count_public_jobs
 
 router = APIRouter(tags=["Smart Search & Insights"])
 
@@ -32,39 +33,43 @@ def get_quick_filters():
     ]
 
 # 2. Gợi ý khi gõ (/api/search/suggest?q=...)
-@router.get("/api/search/suggest", summary="Gợi ý tìm kiếm tức thì theo Vị trí / Kỹ năng / Công ty")
+@router.get("/api/search/suggest", summary="Gợi ý tìm kiếm tức thì theo Công ty / Vị trí / Kỹ năng")
 def get_search_suggestions(q: str = Query("", min_length=1, max_length=100), db: Session = Depends(get_db)):
     kw = q.strip().lower()
-    if not kw:
+    if len(kw) < 2:
         return {"items": []}
 
     results = []
 
-    # Gợi ý vị trí công việc từ jobs (distinct title)
-    title_rows = db.execute(
-        text("SELECT DISTINCT title, COUNT(*) as cnt FROM jobs WHERE status = 'published' AND LOWER(title) LIKE :kw GROUP BY title ORDER BY cnt DESC LIMIT 4"),
-        {"kw": f"%{kw}%"}
-    ).fetchall()
-    for r in title_rows:
-        results.append({"type": "position", "group": "Vị trí", "text": r.title, "count": r.cnt})
-
-    # Gợi ý công ty từ companies
+    # 1. Gợi ý công ty từ companies
     comp_rows = db.execute(
-        text("SELECT DISTINCT name FROM companies WHERE LOWER(name) LIKE :kw LIMIT 2"),
+        text("SELECT name, slug FROM companies WHERE LOWER(name) LIKE :kw LIMIT 3"),
         {"kw": f"%{kw}%"}
     ).fetchall()
     for r in comp_rows:
-        results.append({"type": "company", "group": "Công ty", "text": r.name, "count": None})
+        cnt = count_public_jobs(db, company=r.slug)
+        results.append({"type": "company", "group": "Công ty", "text": r.name, "slug": r.slug, "count": cnt})
 
-    # Gợi ý kỹ năng từ meta_skills
+    # 2. Gợi ý vị trí công việc từ jobs (distinct title)
+    title_rows = db.execute(
+        text("SELECT DISTINCT title FROM jobs WHERE status IN ('open', 'published') AND deleted_at IS NULL AND (deadline IS NULL OR deadline >= CURRENT_DATE) AND LOWER(title) LIKE :kw LIMIT 3"),
+        {"kw": f"%{kw}%"}
+    ).fetchall()
+    for r in title_rows:
+        clean_title = (r.title or "").replace("[Seed]", "").strip()
+        cnt = count_public_jobs(db, q=clean_title)
+        results.append({"type": "position", "group": "Vị trí", "text": clean_title, "count": cnt})
+
+    # 3. Gợi ý kỹ năng từ meta_skills
     skill_rows = db.execute(
-        text("SELECT DISTINCT name FROM meta_skills WHERE LOWER(name) LIKE :kw LIMIT 2"),
+        text("SELECT DISTINCT name FROM meta_skills WHERE LOWER(name) LIKE :kw LIMIT 3"),
         {"kw": f"%{kw}%"}
     ).fetchall()
     for r in skill_rows:
-        results.append({"type": "skill", "group": "Kỹ năng", "text": r.name, "count": None})
+        cnt = count_public_jobs(db, skills=r.name)
+        results.append({"type": "skill", "group": "Kỹ năng", "text": r.name, "count": cnt})
 
-    return {"items": results[:8]}
+    return {"items": results[:9]}
 
 # 3. Gợi ý nới lỏng bộ lọc khi kết quả ít — xem endpoint bên dưới (đặt sau phần này
 #    để thứ tự route không bị đảo).
