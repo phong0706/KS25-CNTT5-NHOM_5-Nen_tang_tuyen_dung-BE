@@ -17,6 +17,7 @@ from app.models.job import Job
 from app.models.user import User
 from app.routers.admin_companies_cvs import _check_company_access, _full_logo_url, _serialize_company, _write_audit
 from app.services.company_logo_service import clear_home_companies_cache
+from app.services.cv_service import get_cv_file_path
 
 router = APIRouter(prefix="/admin", tags=["Admin Audit & CV Governance"])
 
@@ -150,8 +151,7 @@ def open_admin_candidate_cv_file(
     cand = db.get(User, app_row.candidate_id)
     job = db.get(Job, app_row.job_id)
 
-    cv_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "cvs"
-    file_path = cv_dir / cv.stored_name
+    file_path = Path(get_cv_file_path(cv.stored_name))
     if not file_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File CV không tồn tại trên hệ thống lưu trữ.")
 

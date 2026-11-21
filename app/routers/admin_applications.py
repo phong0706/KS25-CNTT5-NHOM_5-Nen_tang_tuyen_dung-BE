@@ -13,6 +13,7 @@ from app.models.application import Application, ApplicationStatusHistory, CV, Me
 from app.models.company import Company
 from app.models.job import Job
 from app.models.user import User
+from app.services.cv_service import get_cv_file_path
 from app.schemas.application import AppTabOut, InterviewInfo, StatusHistoryItem
 from app.schemas.employer_application import (
     AdminApplicationDetailOut,
@@ -172,8 +173,7 @@ def get_admin_application_cv(
     cv = db.scalar(select(CV).where(CV.id == app_row.cv_id))
     if not cv:
         raise HTTPException(status_code=404, detail="Bản ghi CV không tồn tại.")
-    cv_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "cvs"
-    fp = cv_dir / cv.stored_name
+    fp = Path(get_cv_file_path(cv.stored_name))
     if not fp.is_file():
         raise HTTPException(status_code=404, detail="Tệp CV không tồn tại trên máy chủ.")
     ext = Path(cv.original_name or cv.stored_name).suffix.lower()

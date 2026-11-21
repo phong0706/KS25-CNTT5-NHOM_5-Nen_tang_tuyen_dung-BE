@@ -49,10 +49,11 @@ def ensure_storage_dirs() -> None:
 
 def get_cv_file_path(stored_name: str) -> str:
     """Trả về đường dẫn tuyệt đối của file CV. Ưu tiên storage/cvs, fallback uploads/cvs."""
-    p = os.path.join(CV_STORAGE_DIR, stored_name)
+    clean = os.path.basename(stored_name or "")
+    p = os.path.join(CV_STORAGE_DIR, clean)
     if os.path.isfile(p):
         return p
-    legacy_p = os.path.join(LEGACY_UPLOAD_DIR, stored_name)
+    legacy_p = os.path.join(LEGACY_UPLOAD_DIR, clean)
     if os.path.isfile(legacy_p):
         return legacy_p
     return p

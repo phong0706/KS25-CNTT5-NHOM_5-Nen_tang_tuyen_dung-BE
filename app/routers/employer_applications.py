@@ -29,6 +29,7 @@ from app.schemas.employer_application import (
     EmployerApplicationItemOut, EmployerApplicationListOut,
     EmployerInterviewScheduleIn, EmployerStatusUpdateIn,
 )
+from app.services.cv_service import get_cv_file_path
 from app.services.interview_service import check_interview_overlap
 from app.services.matching import compute_job_match
 from app.services.notification import notify_application_status_changed, notify_interview
@@ -296,8 +297,6 @@ def get_employer_application_detail(
     )
 
 
-UPLOAD_CV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "cvs")
-
 
 @router.get("/{app_id}/cv", summary="Xem / tải file CV của đơn ứng tuyển")
 def get_application_cv_file(
@@ -328,7 +327,7 @@ def get_application_cv_file(
     if not cv or not cv.stored_name:
         raise HTTPException(status_code=404, detail="Không tìm thấy thông tin file CV trong hệ thống.")
 
-    filepath = os.path.join(UPLOAD_CV_DIR, cv.stored_name)
+    filepath = get_cv_file_path(cv.stored_name)
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="File CV không tồn tại trên hệ thống lưu trữ.")
 
@@ -347,8 +346,8 @@ def get_application_cv_file(
         filepath,
         media_type=media_type,
         filename=filename,
+        content_disposition_type="inline",
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
             "Access-Control-Expose-Headers": "Content-Disposition, Content-Type",
         },
     )

@@ -20,6 +20,7 @@ from app.models.company import Company
 from app.models.job import Job
 from app.models.profile_view import ProfileView
 from app.models.user import User
+from app.services.cv_service import get_cv_file_path
 from app.services.matching import compute_job_match
 from app.services.profile_access import (
     build_candidate_profile_payload,
@@ -30,7 +31,6 @@ from app.services.profile_access import (
 
 router = APIRouter(tags=["Employer Candidate Profile"])
 
-CV_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "cvs"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
@@ -166,15 +166,15 @@ def get_employer_candidate_cv(
     if not cv or not cv.stored_name:
         raise HTTPException(status_code=404, detail="Không tìm thấy thông tin file CV trong hệ thống.")
 
-    fp = (CV_DIR / cv.stored_name).resolve()
-    if not str(fp).startswith(str(CV_DIR.resolve())) or not fp.is_file():
+    fp = Path(get_cv_file_path(cv.stored_name))
+    if not fp.is_file():
         raise HTTPException(status_code=404, detail="File CV không tồn tại trên hệ thống lưu trữ.")
 
     fn = app_row.cv_name_snapshot or cv.original_name or "CV.pdf"
     mime = "application/pdf" if fp.suffix.lower() == ".pdf" else (cv.mime_type or "application/octet-stream")
     return FileResponse(
-        path=str(fp), media_type=mime, filename=fn,
-        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": f'inline; filename="{fn}"'},
+        path=str(fp), media_type=mime, filename=fn, content_disposition_type="inline",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
 
 
