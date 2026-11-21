@@ -77,6 +77,7 @@ def get_search_suggestions(q: str = Query("", min_length=1, max_length=100), db:
 @router.get("/api/jobs/relaxed", summary="Gợi ý nới lỏng bộ lọc thông minh")
 def get_relaxed_search(
     q: Optional[str] = Query(""),
+    company: Optional[str] = Query(""),
     location: Optional[str] = Query(""),
     level: Optional[str] = Query(""),
     category: Optional[str] = Query(""),
@@ -103,8 +104,11 @@ def get_relaxed_search(
                 or_(Job.deadline.is_(None), Job.deadline >= date.today()),
             )
         )
+        if filters.get("company"):
+            stmt = stmt.where(Company.slug == filters["company"].strip().lower())
         if filters.get("q"):
-            stmt = stmt.where(Job.title.ilike(f"%{filters['q']}%"))
+            q_val = filters["q"].strip()
+            stmt = stmt.where(or_(Job.title.ilike(f"%{q_val}%"), Company.name.ilike(f"%{q_val}%"), Company.slug.ilike(f"%{q_val}%")))
         # location / level / work_type lưu dạng chuỗi trực tiếp trên bảng jobs.
         for key, col in (("location", Job.location), ("level", Job.level), ("type", Job.work_type)):
             raw = filters.get(key)
@@ -127,7 +131,7 @@ def get_relaxed_search(
         return int(db.scalar(stmt) or 0)
 
     base = dict(
-        q=q or "", location=location or "", level=level or "",
+        q=q or "", company=company or "", location=location or "", level=level or "",
         category=category or "", type=type or "",
         salary_min=salary_min, salary_max=salary_max,
     )
@@ -136,6 +140,7 @@ def get_relaxed_search(
     suggestions = []
     # Thử bỏ từng bộ lọc một; chỉ gợi ý nếu số kết quả tăng lên.
     removable = [
+        ("company", "công ty", {"company": ""}),
         ("location", "địa điểm", {"location": ""}),
         ("level", "cấp bậc", {"level": ""}),
         ("category", "ngành nghề", {"category": ""}),

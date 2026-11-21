@@ -245,6 +245,7 @@ class PublicJobsFacetsOut(BaseModel):
     level: list[FacetItemOut] = Field(default_factory=list)
     type: list[FacetItemOut] = Field(default_factory=list)
     category: list[FacetItemOut] = Field(default_factory=list)
+    company: list[FacetItemOut] = Field(default_factory=list)
 
 
 class PublicJobsSearchOut(BaseModel):
