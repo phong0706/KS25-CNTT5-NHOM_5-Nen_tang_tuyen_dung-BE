@@ -116,10 +116,13 @@ def get_employer_candidate_profile(
     match_data = None
     if job_id and job_obj:
         m = compute_job_match(
-            {"skills": raw_skills, "headline": profile.headline, "location": profile.location, "work_type": profile.work_type, "expected_salary": profile.expected_salary or profile.desired_salary},
+            {"skills": raw_skills, "level": profile.level, "headline": profile.headline, "location": profile.location or profile.address, "work_type": profile.work_type, "expected_salary": profile.expected_salary or profile.desired_salary},
             {"skills": [s if isinstance(s, str) else getattr(s, "skill_name", str(s)) for s in (getattr(job_obj, "skills", None) or [])], "level": job_obj.level, "location": job_obj.location, "work_type": job_obj.work_type, "salary_min": job_obj.salary_min, "salary_max": job_obj.salary_max, "is_salary_negotiable": job_obj.is_salary_negotiable},
         )
-        match_data = {"score": m["match_score"], "matched_skills": m["matched_skills"], "missing_skills": m["missing_skills"]}
+        match_data = {
+            "score": m["match_score"], "matched_skills": m["matched_skills"], "missing_skills": m["missing_skills"],
+            "skills_score": m["skills_score"], "level_score": m["level_score"], "location_score": m["location_score"], "salary_score": m["salary_score"], "reason": m["reason"],
+        }
 
     payload = build_candidate_profile_payload(profile, cand_user, access, raw_skills, exps, edus, apps_to_you, match_data)
     return JSONResponse(content=payload, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})

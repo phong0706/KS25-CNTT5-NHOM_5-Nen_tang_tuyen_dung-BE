@@ -19,15 +19,18 @@ BUILTIN_ALIASES = {
     "js": "JavaScript", "javascript": "JavaScript", "es6": "JavaScript",
     "ts": "TypeScript", "typescript": "TypeScript",
     "react": "React", "reactjs": "React", "react.js": "React",
+    "next": "Next.js", "nextjs": "Next.js", "next.js": "Next.js",
     "vue": "Vue", "vuejs": "Vue", "vue.js": "Vue",
     "node": "Node.js", "nodejs": "Node.js", "node.js": "Node.js",
+    "nest": "NestJS", "nestjs": "NestJS", "nest.js": "NestJS",
     "java": "Java", "spring": "Spring Boot", "springboot": "Spring Boot",
     "docker": "Docker", "k8s": "Kubernetes", "kubernetes": "Kubernetes",
     "mysql": "MySQL", "postgres": "PostgreSQL", "postgresql": "PostgreSQL",
-    "redis": "Redis", "aws": "AWS", "git": "Git", "cicd": "CI/CD", "ci/cd": "CI/CD",
+    "redis": "Redis", "aws": "AWS", "gcp": "Google Cloud", "azure": "Azure", "git": "Git", "cicd": "CI/CD", "ci/cd": "CI/CD",
     "go": "Golang", "golang": "Golang", "c++": "C++", "cpp": "C++",
     "c#": "C#", "csharp": "C#", ".net": ".NET", "dotnet": ".NET",
     "php": "PHP", "laravel": "Laravel", "flutter": "Flutter",
+    "react native": "React Native", "reactnative": "React Native",
     "kotlin": "Kotlin", "swift": "Swift", "html": "HTML/CSS", "css": "HTML/CSS",
     "html/css": "HTML/CSS", "tailwind": "Tailwind CSS", "tailwindcss": "Tailwind CSS",
     "graphql": "GraphQL", "mongo": "MongoDB", "mongodb": "MongoDB",
@@ -78,6 +81,31 @@ def compute_level_score(cand_level: str | None, job_level: str | None) -> int:
     return 0
 
 
+CITY_ALIASES = {
+    "hà nội": "hanoi", "ha noi": "hanoi", "hn": "hanoi",
+    "hồ chí minh": "hcm", "ho chi minh": "hcm", "hcm": "hcm", "sài gòn": "hcm", "sai gon": "hcm", "tphcm": "hcm",
+    "đà nẵng": "danang", "da nang": "danang", "đn": "danang",
+    "cần thơ": "cantho", "can tho": "cantho",
+    "hải phòng": "haiphong", "hai phong": "haiphong",
+    "bình dương": "binhduong", "binh duong": "binhduong",
+    "đồng nai": "dongnai", "dong nai": "dongnai",
+}
+
+
+def normalize_city(loc: str | None) -> str | None:
+    if not loc:
+        return None
+    s = loc.lower().strip()
+    for prefix in ("thành phố ", "tp. ", "tp.", "tp ", "tỉnh "):
+        if s.startswith(prefix):
+            s = s[len(prefix):].strip()
+            break
+    for key, code in CITY_ALIASES.items():
+        if key in s:
+            return code
+    return s
+
+
 def compute_location_worktype_score(cand_loc: str | None, cand_wt: str | None, job_loc: str | None, job_wt: str | None) -> int:
     loc_score = 5
     if job_loc:
@@ -85,8 +113,14 @@ def compute_location_worktype_score(cand_loc: str | None, cand_wt: str | None, j
         if any(kw in jl for kw in ("toàn quốc", "remote", "từ xa")) or (job_wt and "remote" in job_wt.lower()):
             loc_score = 10
         elif cand_loc:
-            cl = cand_loc.lower()
-            loc_score = 10 if (cl in jl or jl in cl or any(p in jl for p in cl.split())) else 0
+            c_city = normalize_city(cand_loc)
+            j_city = normalize_city(job_loc)
+            if c_city and j_city and c_city == j_city:
+                loc_score = 10
+            elif c_city and j_city and (c_city in j_city or j_city in c_city):
+                loc_score = 10
+            else:
+                loc_score = 0
 
     wt_score = 3
     if job_wt:

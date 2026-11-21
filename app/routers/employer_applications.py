@@ -30,6 +30,7 @@ from app.schemas.employer_application import (
     EmployerInterviewScheduleIn, EmployerStatusUpdateIn,
 )
 from app.services.interview_service import check_interview_overlap
+from app.services.matching import compute_job_match
 from app.services.notification import notify_application_status_changed, notify_interview
 
 router = APIRouter(prefix="/employer/applications", tags=["Employer Applications"])
@@ -104,34 +105,67 @@ def _iv_info(app_row) -> InterviewInfo | None:
         interview_location=app_row.interview_location,
     )
 
-def _calc_match_score(job_skills_val, cand_skills_val) -> int:
-    if not job_skills_val:
-        return 80
-    j_skills = job_skills_val if isinstance(job_skills_val, list) else []
-    if not j_skills and isinstance(job_skills_val, str):
-        try:
-            j_skills = json.loads(job_skills_val)
-        except Exception:
-            j_skills = [s.strip() for s in job_skills_val.split(",") if s.strip()]
-    if not j_skills:
-        return 80
-    c_skills = []
-    if cand_skills_val:
-        if isinstance(cand_skills_val, list):
-            c_skills = cand_skills_val
-        elif isinstance(cand_skills_val, str):
+def _calc_match_score(job_obj_or_skills, cand_prof_or_skills) -> int:
+    if isinstance(cand_prof_or_skills, dict):
+        cand_dict = cand_prof_or_skills
+    elif hasattr(cand_prof_or_skills, "skills_json"):
+        prof = cand_prof_or_skills
+        c_skills = []
+        if prof and prof.skills_json:
             try:
-                c_skills = json.loads(cand_skills_val)
+                parsed = json.loads(prof.skills_json)
+                c_skills = parsed if isinstance(parsed, list) else [str(parsed)]
             except Exception:
-                c_skills = [s.strip() for s in cand_skills_val.split(",") if s.strip()]
-    if not c_skills:
-        return 65
-    j_set = {str(s).strip().lower() for s in j_skills if str(s).strip()}
-    c_set = {str(s).strip().lower() for s in c_skills if str(s).strip()}
-    if not j_set:
-        return 80
-    common = j_set.intersection(c_set)
-    return int(min(98, max(55, round(60 + (len(common) / len(j_set)) * 38))))
+                c_skills = [s.strip() for s in str(prof.skills_json).split(",") if s.strip()]
+        cand_dict = {
+            "skills": c_skills,
+            "level": prof.level if prof else None,
+            "headline": prof.headline if prof else None,
+            "location": (prof.location or prof.address) if prof else None,
+            "work_type": prof.work_type if prof else None,
+            "expected_salary": (prof.expected_salary or prof.desired_salary) if prof else None,
+        }
+    else:
+        c_skills = cand_prof_or_skills if isinstance(cand_prof_or_skills, list) else []
+        if isinstance(cand_prof_or_skills, str):
+            try:
+                parsed = json.loads(cand_prof_or_skills)
+                c_skills = parsed if isinstance(parsed, list) else [str(parsed)]
+            except Exception:
+                c_skills = [s.strip() for s in cand_prof_or_skills.split(",") if s.strip()]
+        cand_dict = {"skills": c_skills}
+
+    if isinstance(job_obj_or_skills, dict):
+        job_dict = job_obj_or_skills
+    elif hasattr(job_obj_or_skills, "skills"):
+        job = job_obj_or_skills
+        j_skills = job.skills if isinstance(job.skills, list) else []
+        if not j_skills and isinstance(job.skills, str):
+            try:
+                parsed = json.loads(job.skills)
+                j_skills = parsed if isinstance(parsed, list) else [str(parsed)]
+            except Exception:
+                j_skills = [s.strip() for s in str(job.skills).split(",") if s.strip()]
+        job_dict = {
+            "skills": j_skills,
+            "level": job.level,
+            "location": job.location,
+            "work_type": job.work_type,
+            "salary_min": job.salary_min,
+            "salary_max": job.salary_max,
+            "is_salary_negotiable": bool(job.is_salary_negotiable),
+        }
+    else:
+        j_skills = job_obj_or_skills if isinstance(job_obj_or_skills, list) else []
+        if isinstance(job_obj_or_skills, str):
+            try:
+                parsed = json.loads(job_obj_or_skills)
+                j_skills = parsed if isinstance(parsed, list) else [str(parsed)]
+            except Exception:
+                j_skills = [s.strip() for s in job_obj_or_skills.split(",") if s.strip()]
+        job_dict = {"skills": j_skills}
+
+    return compute_job_match(cand_dict, job_dict)["match_score"]
 
 @router.get("/unviewed-count", summary="Số lượng hồ sơ chưa xem")
 def get_unviewed_count(
@@ -182,7 +216,7 @@ def list_employer_applications(
         tabs.append(AppTabOut(key=meta.slug, label=meta.name, count=counts[_normalize_status(meta.slug)]))
 
     base = (
-        select(Application, Job.title.label("job_title"), Job.skills.label("job_skills"), User, CandidateProfile.skills_json)
+        select(Application, Job, User, CandidateProfile)
         .join(Job, Application.job_id == Job.id)
         .outerjoin(CandidateProfile, _candidate_profile_join())
         .join(User, User.id == func.coalesce(Application.candidate_id, CandidateProfile.user_id))
@@ -200,15 +234,15 @@ def list_employer_applications(
     all_rows = db.execute(base.order_by(Application.created_at.desc(), Application.id.desc())).all()
 
     items = []
-    for app_row, j_title, j_skills, cand, c_skills_json in all_rows:
+    for app_row, job, cand, prof in all_rows:
         status_label, status_tone = _status_meta(app_row.status, sm)
         items.append(EmployerApplicationItemOut(
-            id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title),
+            id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=job.title),
             candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
             cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
             status=app_row.status, status_label=status_label, status_tone=status_tone,
             is_viewed=bool(app_row.viewed_at is not None),
-            match_score=_calc_match_score(j_skills, c_skills_json),
+            match_score=_calc_match_score(job, prof),
             created_at=app_row.created_at, updated_at=app_row.updated_at, interview=_iv_info(app_row),
         ))
 
@@ -225,9 +259,8 @@ def get_employer_application_detail(
 ):
     row = db.execute(
         select(
-            Application, Job.title.label("job_title"), Job.skills.label("job_skills"),
-            Company.slug.label("comp_slug"), Company.name.label("comp_name"), User,
-            CandidateProfile.skills_json, CandidateProfile.public_id.label("cand_public_id"),
+            Application, Job, Company.slug.label("comp_slug"), Company.name.label("comp_name"), User,
+            CandidateProfile,
         )
         .join(Job, Application.job_id == Job.id)
         .join(Company, Job.company_id == Company.id)
@@ -238,7 +271,7 @@ def get_employer_application_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không thuộc quyền quản lý.")
 
-    app_row, j_title, j_skills, c_slug, c_name, cand, c_skills_json, cand_public_id = row
+    app_row, job, c_slug, c_name, cand, prof = row
     sm = _smap(db)
     history = []
     for entry in get_status_history_by_application(db, app_id):
@@ -252,12 +285,12 @@ def get_employer_application_detail(
     allowed = ALLOWED_TRANSITIONS.get(_normalize_status(app_row.status), ())
 
     return EmployerApplicationDetailOut(
-        id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title, company_slug=c_slug, company_name=c_name),
-        candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url, public_id=cand_public_id),
+        id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=job.title, company_slug=c_slug, company_name=c_name),
+        candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url, public_id=prof.public_id if prof else None),
         cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
         status=app_row.status, status_label=status_label, status_tone=status_tone,
         is_viewed=bool(app_row.viewed_at is not None),
-        match_score=_calc_match_score(j_skills, c_skills_json),
+        match_score=_calc_match_score(job, prof),
         created_at=app_row.created_at, updated_at=app_row.updated_at, interview=_iv_info(app_row), history=history,
         allowed_transitions=[_stored_status(status, app_row.status) for status in allowed],
     )
