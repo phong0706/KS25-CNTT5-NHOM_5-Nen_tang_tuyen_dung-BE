@@ -86,6 +86,9 @@ class ProfileViewRateLimiter:
     def check_and_record(self, employer_id: int) -> tuple[bool, int]:
         now = time.monotonic()
         with self._lock:
+            if len(self._requests) > 200:
+                for k in [k for k, v in self._requests.items() if not v or (now - v[-1]) > self.window_seconds]:
+                    del self._requests[k]
             q = self._requests[employer_id]
             while q and (now - q[0]) > self.window_seconds:
                 q.popleft()
