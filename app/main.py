@@ -28,6 +28,7 @@ from app.routers import (
     candidate_apply,
     candidate_cover_letters,
     candidate_cv_documents,
+    candidate_cvs,
     candidate_detail,
     candidate_job_matches,
     candidate_profile,
@@ -160,6 +161,7 @@ app.include_router(jobs.router, prefix="/api")
 
 app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
+app.include_router(candidate_cvs.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
 app.include_router(candidate_job_matches.router, prefix="/api")

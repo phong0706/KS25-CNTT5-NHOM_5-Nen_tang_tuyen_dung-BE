@@ -36,6 +36,15 @@ class CVOut(BaseModel):
     size_bytes: int
     is_default: bool
     created_at: datetime
+    mime: str | None = None
+    size: int | None = None
+    uploaded_at: datetime | None = None
+    used_count: int = 0
+    allowed_actions: list[str] = Field(default_factory=list)
+
+
+class CVRenameIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
 
 
 # ── Apply ─────────────────────────────────────────────────────
