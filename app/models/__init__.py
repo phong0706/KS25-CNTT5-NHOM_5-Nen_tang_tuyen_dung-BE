@@ -69,6 +69,8 @@ from app.models.match_score import (  # noqa: F401
     CandidateMatchingSetting,
     SkillJobIndex,
 )
+from app.models.profile_view import ProfileView  # noqa: F401
+
 
 
 
