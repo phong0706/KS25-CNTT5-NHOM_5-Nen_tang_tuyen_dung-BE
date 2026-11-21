@@ -251,17 +251,21 @@ QUESTIONS = [
 
 def seed():
     with engine.connect() as conn:
-        conn.execute(text("TRUNCATE TABLE interview_questions"))
-        conn.execute(text("TRUNCATE TABLE interview_practice"))
+        # An toàn dữ liệu (A7): Tuyệt đối không TRUNCATE TABLE làm mất dữ liệu luyện tập người dùng
         stmt = text("""
             INSERT INTO interview_questions (category_id, level_id, question, answer_hint, is_published)
             VALUES (:category_id, :level_id, :question, :answer_hint, 1)
         """)
         for q in QUESTIONS:
-            conn.execute(stmt, q)
+            existing = conn.execute(
+                text("SELECT id FROM interview_questions WHERE question = :question"),
+                {"question": q["question"]}
+            ).scalar()
+            if not existing:
+                conn.execute(stmt, q)
         conn.commit()
         cnt = conn.execute(text("SELECT COUNT(*) FROM interview_questions")).scalar()
-        print(f"Seed completed! Total questions in database: {cnt}")
+        print(f"Seed completed safely! Total questions in database: {cnt}")
 
 if __name__ == "__main__":
     seed()
