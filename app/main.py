@@ -31,6 +31,7 @@ from app.routers import (
     candidate_cover_letters,
     candidate_cv_documents,
     candidate_detail,
+    candidate_followed_companies,
     candidate_profile,
     candidate_recommended,
     candidate_saved_jobs,
@@ -157,6 +158,7 @@ app.include_router(jobs.router, prefix="/api")
 app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
+app.include_router(candidate_followed_companies.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
 app.include_router(candidate_apply.router, prefix="/api")
 app.include_router(candidate_detail.router, prefix="/api")

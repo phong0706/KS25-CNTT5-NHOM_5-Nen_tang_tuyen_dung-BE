@@ -27,7 +27,10 @@ from app.schemas.job import (
     JobTabOut,
 )
 from app.services.company_verification_actions import enforce_company_job_rule
-from app.services.notification import notify_job_status_changed
+from app.services.notification import (
+    notify_company_followers_about_job,
+    notify_job_status_changed,
+)
 
 router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
 
@@ -285,6 +288,7 @@ def patch_job_status(
 
     # Chỉ trả undo_action nếu tin trước đó đang hiển thị (published) hoặc đóng từ published
     effective_undo = undo_action if (action in ("hide", "close") and job.status == "published") else None
+    first_publication = next_status == "published" and job.published_at is None
     job.status = next_status
     if next_status == "published" and job.published_at is None:
         job.published_at = datetime.now(timezone.utc)
@@ -301,6 +305,15 @@ def patch_job_status(
         status_label=st_label,
         actor_id=current_user.id,
     )
+    if first_publication and job.company_id is not None:
+        notify_company_followers_about_job(
+            db,
+            company_id=job.company_id,
+            company_name=company.name if company else "Công ty",
+            job_id=job.id,
+            job_title=job.title,
+            actor_id=current_user.id,
+        )
 
     db.commit()
     db.refresh(job)

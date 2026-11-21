@@ -55,6 +55,7 @@ class NotificationType:
     JOB_SUBMITTED = "job_submitted"
     JOB_APPROVED = "job_approved"
     JOB_REJECTED = "job_rejected"
+    COMPANY_NEW_JOB = "company_new_job"
     # Logo công ty
     LOGO_PENDING = "logo_pending"
     LOGO_APPROVED = "logo_approved"
@@ -155,6 +156,7 @@ _TYPE_TITLES: dict[str, str] = {
     NotificationType.JOB_SUBMITTED: "Đã gửi tin chờ duyệt",
     NotificationType.JOB_APPROVED: "Tin tuyển dụng đã được duyệt",
     NotificationType.JOB_REJECTED: "Tin tuyển dụng chưa được duyệt",
+    NotificationType.COMPANY_NEW_JOB: "Công ty bạn theo dõi có tin tuyển dụng mới",
     NotificationType.LOGO_PENDING: "Logo công ty chờ duyệt",
     NotificationType.LOGO_APPROVED: "Logo công ty đã được duyệt",
     NotificationType.LOGO_REJECTED: "Logo công ty bị từ chối duyệt",
@@ -400,6 +402,46 @@ def notify_job_status_changed(
         dedupe_key=f"job:{job_id}:status:{status}",
         commit=commit,
     )
+
+
+def notify_company_followers_about_job(
+    db: Session,
+    *,
+    company_id: int,
+    company_name: str,
+    job_id: int,
+    job_title: str,
+    actor_id: int | None = None,
+) -> int:
+    """Thông báo tới ứng viên đang theo dõi công ty khi tin mới được đăng."""
+    from app.models.company_follow import CompanyFollow
+
+    follower_ids = db.scalars(
+        select(CompanyFollow.user_id).where(CompanyFollow.company_id == company_id)
+    ).all()
+    notified = 0
+    for user_id in follower_ids:
+        notification = create_notification(
+            db,
+            user_id=user_id,
+            actor_id=actor_id,
+            type=NotificationType.COMPANY_NEW_JOB,
+            title=f"{company_name} vừa đăng tin tuyển dụng mới",
+            message=f"{company_name} vừa đăng tin '{job_title}'.",
+            link=f"/pages/job-detail.html?id={job_id}",
+            ref_type="job",
+            ref_id=job_id,
+            payload_json={
+                "company_id": company_id,
+                "company_name": company_name,
+                "job_id": job_id,
+                "job_title": job_title,
+            },
+            dedupe_key=f"company:{company_id}:job:{job_id}:published",
+        )
+        if notification is not None:
+            notified += 1
+    return notified
 
 
 
