@@ -2,9 +2,11 @@
 
 Muốn thêm cấu hình mới: thêm 1 dòng vào class Settings + thêm vào .env.example.
 """
+import sys
+import os
 from urllib.parse import quote_plus
 
-from pydantic import ValidationError
+from pydantic import ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +20,16 @@ class Settings(BaseSettings):
     DB_USER: str = "root"
     DB_PASSWORD: str
     DB_NAME: str = "app_db"
+
+    @field_validator("DB_NAME", mode="after")
+    @classmethod
+    def enforce_test_db(cls, v: str) -> str:
+        # Tự động bảo vệ: Khi chạy trong môi trường test (pytest hoặc script có test trong argv),
+        # ép buộc sử dụng app_db_test trừ khi có chỉ định biến môi trường khác (BUG-S2-07).
+        is_testing = any("test" in str(arg).lower() for arg in sys.argv)
+        if is_testing and "test" not in v.lower() and "DB_NAME" not in os.environ:
+            return "app_db_test"
+        return v
 
     # Chuỗi các origin cách nhau bằng dấu phẩy, hoặc "*"
     CORS_ORIGINS: str = (
