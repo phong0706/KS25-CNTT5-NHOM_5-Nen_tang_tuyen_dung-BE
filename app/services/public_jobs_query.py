@@ -2,6 +2,7 @@
 from datetime import date, datetime
 import json
 import math
+import re
 
 from sqlalchemy import String, and_, case, cast, func, or_, select, text
 from sqlalchemy.orm import Session
@@ -24,7 +25,8 @@ def build_public_job_filters(*, q: str = "", location: str = "", level: str = ""
     conds = [Job.status.in_(["open", "published"]), Job.deleted_at.is_(None), or_(Job.deadline.is_(None), Job.deadline >= today), comp_ok]
     kw = q.strip()
     if kw:
-        tokens = [t for t in kw.replace("-", " ").split() if len(t) >= 2]
+        tokens = [re.sub(r"[^\w]", "", t) for t in kw.replace("-", " ").split()]
+        tokens = [t for t in tokens if len(t) >= 2]
         if len(kw) >= 3 and tokens:
             boolean_q = " ".join(f"+{t}*" for t in tokens[:5])
             conds.append(or_(text("MATCH(jobs.title) AGAINST(:ft_q IN BOOLEAN MODE)").bindparams(ft_q=boolean_q), Job.title.ilike(f"%{kw}%")))
