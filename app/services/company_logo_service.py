@@ -263,6 +263,83 @@ def remove_company_logo(db: Session, company_id: int, actor_id: int, actor_name:
     return comp
 
 
+def get_company_logo_state(db: Session, comp: Company, request: Any = None) -> dict:
+    """Nguồn sự thật duy nhất xác định trạng thái và URL logo chuẩn hóa của doanh nghiệp."""
+    raw_path = getattr(comp, "logo_url", None) or getattr(comp, "logo", None)
+    base_st = (getattr(comp, "logo_status", None) or ("active" if raw_path else "missing")).lower()
+    if base_st == "approved":
+        base_st = "active"
+
+    pending = None
+    if db is not None and hasattr(comp, "id"):
+        pending = (
+            db.query(CompanyLogo)
+            .filter_by(company_id=comp.id, status="cho_duyet")
+            .order_by(CompanyLogo.id.desc())
+            .first()
+        )
+
+    if pending or base_st == "pending":
+        status_key = "pending"
+        label = "Chờ duyệt logo mới"
+    elif raw_path and base_st == "active":
+        status_key = "active"
+        label = "Đang sử dụng"
+    elif base_st == "removed":
+        status_key = "removed"
+        label = "Đã gỡ"
+    else:
+        status_key = "missing"
+        label = "Chưa có logo"
+
+    v = getattr(comp, "logo_version", 1) or 1
+    v_suffix = f"?v={v}"
+    logo_path = f"{raw_path}{v_suffix}" if (raw_path and status_key == "active") else None
+
+    base_url = str(request.base_url).rstrip("/") if (request and hasattr(request, "base_url")) else ""
+    full_url = None
+    if logo_path:
+        full_url = logo_path if logo_path.startswith(("http://", "https://")) else f"{base_url}{logo_path if logo_path.startswith('/') else '/' + logo_path}"
+
+    full_url_2x = None
+    url_2x = getattr(comp, "logo_url_2x", None)
+    if url_2x and status_key == "active":
+        p2x = f"{url_2x}{v_suffix}"
+        full_url_2x = p2x if p2x.startswith(("http://", "https://")) else f"{base_url}{p2x if p2x.startswith('/') else '/' + p2x}"
+
+    pending_data = None
+    if pending:
+        meta = get_logo_original_meta(pending.file_key)
+        pv = f"?v={pending.version}" if pending.version else ""
+        p_path = f"/uploads/logos/{pending.file_key}{pv}"
+        p_path_2x = f"/uploads/logos/{pending.file_key_2x}{pv}" if pending.file_key_2x else None
+        p_full = f"{base_url}{p_path}" if base_url else p_path
+        p_full_2x = f"{base_url}{p_path_2x}" if (base_url and p_path_2x) else p_path_2x
+        u = db.get(User, comp.logo_uploaded_by) if comp.logo_uploaded_by else None
+        pending_data = {
+            "id": pending.id, "version": pending.version, "file_key": pending.file_key, "file_key_2x": pending.file_key_2x,
+            "logo_url": p_path, "logo_full_url": p_full, "logo_url_2x": p_path_2x, "logo_full_url_2x": p_full_2x,
+            "original_url": f"/api/company-logos/{pending.id}/original",
+            "orig_width": meta["orig_width"], "orig_height": meta["orig_height"], "orig_ratio": meta["orig_ratio"],
+            "uploader_name": u.full_name if u else None,
+            "created_at": pending.created_at.isoformat() if pending.created_at else "",
+        }
+
+    c_up = getattr(comp, "updated_at", None)
+    return {
+        "status": status_key,
+        "is_active": status_key == "active",
+        "label": label,
+        "logo_path": logo_path,
+        "logo_url": logo_path,
+        "logo_full_url": full_url,
+        "logo_url_2x": full_url_2x,
+        "logo_version": v,
+        "pending_logo": pending_data,
+        "updated_at": c_up.isoformat() if c_up else None,
+    }
+
+
 def get_home_companies(db: Session) -> List[Dict[str, Any]]:
     global _HOME_COMPANIES_CACHE
     now = time.time()

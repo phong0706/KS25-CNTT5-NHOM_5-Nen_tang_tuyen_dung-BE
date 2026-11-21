@@ -167,7 +167,7 @@ def test_remove_logo(client, admin_token, db_session):
     c7 = db_session.get(Company, 7)
     if c7:
         c7.logo_url = "/uploads/logos/logo_7_6bb6f6bf6f3b.png"
-        c7.logo_status = "approved"
+        c7.logo_status = "active"
         c7.logo_version = 1
     db_session.commit()
 

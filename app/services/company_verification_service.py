@@ -2,7 +2,7 @@
 có khóa lạc quan (version), ghi audit_logs và phát thông báo trong ứng dụng.
 Giới hạn: <= 200 dòng.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import uuid
 
@@ -157,7 +157,13 @@ def approve_verification_request(
     if expected_version is not None:
         conds.append(CompanyVerification.version == expected_version)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now()
+    if verif.submitted_at and now < verif.submitted_at:
+        raise_field_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "INVALID_DATE_ORDER",
+            "Thời điểm phê duyệt không được sớm hơn thời điểm gửi hồ sơ.",
+        )
     res = db.execute(
         update(CompanyVerification).where(*conds).values(
             status="da_xac_minh", reviewed_by=actor.id, reviewed_at=now,

@@ -92,7 +92,9 @@ def list_admin_company_verifications(
 
     if logo_status == "pending":
         stmt = stmt.where(or_(Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))
-    elif logo_status in ("active", "removed", "missing"):
+    elif logo_status in ("active", "approved"):
+        stmt = stmt.where(Company.logo_status.in_(["active", "approved"]))
+    elif logo_status in ("removed", "missing"):
         stmt = stmt.where(Company.logo_status == logo_status)
     kw = q.strip()
     if kw:

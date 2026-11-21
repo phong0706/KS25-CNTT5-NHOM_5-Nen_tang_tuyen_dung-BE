@@ -20,6 +20,7 @@ from app.models.user import User
 from app.services.company_logo_service import (
     approve_company_logo,
     clear_home_companies_cache,
+    get_company_logo_state,
     get_logo_original_meta,
     upload_company_logo,
 )
@@ -57,31 +58,8 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
     u = db.get(User, comp.logo_uploaded_by) if comp.logo_uploaded_by else None
     uploader_name = (u.full_name if u else f"User #{comp.logo_uploaded_by}") if comp.logo_uploaded_by else None
     owner = db.get(User, comp.employer_id) if comp.employer_id else None
-    raw_path = comp.logo_url or comp.logo
-    l_status = comp.logo_status or ("active" if raw_path else "missing")
-    if not raw_path and l_status == "active":
-        l_status = "missing"
-    pending = db.query(CompanyLogo).filter_by(company_id=comp.id, status="cho_duyet").order_by(CompanyLogo.id.desc()).first()
-    pending_data = None
-    if pending:
-        l_status = "pending"
-        meta = get_logo_original_meta(pending.file_key)
-        pending_data = {
-            "id": pending.id,
-            "version": pending.version,
-            "file_key": pending.file_key,
-            "file_key_2x": pending.file_key_2x,
-            "logo_url": f"/uploads/logos/{pending.file_key}?v={pending.version}",
-            "logo_full_url": _full_logo_url(request, f"/uploads/logos/{pending.file_key}?v={pending.version}"),
-            "logo_url_2x": f"/uploads/logos/{pending.file_key_2x}?v={pending.version}" if pending.file_key_2x else None,
-            "logo_full_url_2x": _full_logo_url(request, f"/uploads/logos/{pending.file_key_2x}?v={pending.version}") if pending.file_key_2x else None,
-            "original_url": f"/api/company-logos/{pending.id}/original",
-            "orig_width": meta["orig_width"],
-            "orig_height": meta["orig_height"],
-            "orig_ratio": meta["orig_ratio"],
-            "uploader_name": uploader_name,
-            "created_at": pending.created_at.isoformat() if pending.created_at else "",
-        }
+    logo_state = get_company_logo_state(db, comp, request)
+
     return {
         "id": comp.id, "name": comp.name, "slug": comp.slug,
         "employer_id": comp.employer_id,
@@ -91,13 +69,18 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
         "website": comp.website, "address": comp.address,
         "status": comp.status.value if hasattr(comp.status, "value") else str(comp.status),
         "open_jobs_count": int(open_jobs or 0),
-        "logo_path": raw_path, "logo_full_url": _full_logo_url(request, raw_path),
-        "logo_url_2x": _full_logo_url(request, comp.logo_url_2x),
-        "logo_status": l_status, "logo_uploaded_by": comp.logo_uploaded_by,
+        "logo_url": logo_state["logo_url"],
+        "logo_path": logo_state["logo_path"],
+        "logo_full_url": logo_state["logo_full_url"],
+        "logo_url_2x": logo_state["logo_url_2x"],
+        "logo_status": logo_state["status"],
+        "logo_status_label": logo_state["label"],
+        "logo_version": logo_state["logo_version"],
+        "logo_uploaded_by": comp.logo_uploaded_by,
         "logo_uploaded_by_name": uploader_name,
         "logo_uploaded_at": comp.logo_uploaded_at.isoformat() if comp.logo_uploaded_at else None,
         "updated_at": comp.updated_at.isoformat() if comp.updated_at else None,
-        "pending_logo": pending_data,
+        "pending_logo": logo_state["pending_logo"],
     }
 
 
@@ -120,7 +103,9 @@ def list_admin_companies(
     if logo_status == "pending":
         logo_pending_sub = select(CompanyLogo.company_id).where(CompanyLogo.status == "cho_duyet").distinct()
         stmt = stmt.where(or_(Company.logo_status == "pending", Company.id.in_(logo_pending_sub)))
-    elif logo_status in ("active", "removed", "missing"):
+    elif logo_status in ("active", "approved"):
+        stmt = stmt.where(Company.logo_status.in_(["active", "approved"]))
+    elif logo_status in ("removed", "missing"):
         stmt = stmt.where(Company.logo_status == logo_status)
     rows = db.execute(stmt.order_by(Company.id.asc())).all()
     items = [_serialize_company(db, request, r[0], int(r[1] or 0)) for r in rows]
