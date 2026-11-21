@@ -27,6 +27,7 @@ class CandidateProfile(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True, nullable=False
     )
+    public_id: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
 
     headline: Mapped[str | None] = mapped_column(String(200), nullable=True)
     birth_date: Mapped[str | None] = mapped_column(String(20), nullable=True)

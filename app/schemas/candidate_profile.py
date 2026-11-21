@@ -52,6 +52,8 @@ class CandidateProfileOut(BaseModel):
     bio: str | None = None
     skills: list[str] = Field(default_factory=list)
     is_searchable: bool = True
+    is_public: bool = True
+    public_id: str | None = None
     version: int = 1
     experiences: list[ExperienceOut] = Field(default_factory=list)
     educations: list[EducationOut] = Field(default_factory=list)
@@ -69,6 +71,7 @@ class CandidateProfilePatch(BaseModel):
     portfolio_url: str | None = Field(default=None, max_length=500)
     bio: str | None = Field(default=None, max_length=500)
     is_searchable: bool | None = None
+    is_public: bool | None = None
     version: int | None = None
 
 

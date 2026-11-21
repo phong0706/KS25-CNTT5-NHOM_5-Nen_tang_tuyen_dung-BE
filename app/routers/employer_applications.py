@@ -226,7 +226,8 @@ def get_employer_application_detail(
     row = db.execute(
         select(
             Application, Job.title.label("job_title"), Job.skills.label("job_skills"),
-            Company.slug.label("comp_slug"), Company.name.label("comp_name"), User, CandidateProfile.skills_json,
+            Company.slug.label("comp_slug"), Company.name.label("comp_name"), User,
+            CandidateProfile.skills_json, CandidateProfile.public_id.label("cand_public_id"),
         )
         .join(Job, Application.job_id == Job.id)
         .join(Company, Job.company_id == Company.id)
@@ -237,7 +238,7 @@ def get_employer_application_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không thuộc quyền quản lý.")
 
-    app_row, j_title, j_skills, c_slug, c_name, cand, c_skills_json = row
+    app_row, j_title, j_skills, c_slug, c_name, cand, c_skills_json, cand_public_id = row
     sm = _smap(db)
     history = []
     for entry in get_status_history_by_application(db, app_id):
@@ -252,7 +253,7 @@ def get_employer_application_detail(
 
     return EmployerApplicationDetailOut(
         id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title, company_slug=c_slug, company_name=c_name),
-        candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
+        candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url, public_id=cand_public_id),
         cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
         status=app_row.status, status_label=status_label, status_tone=status_tone,
         is_viewed=bool(app_row.viewed_at is not None),

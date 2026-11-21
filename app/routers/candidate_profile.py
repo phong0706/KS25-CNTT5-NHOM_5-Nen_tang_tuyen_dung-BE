@@ -120,7 +120,19 @@ def _get_or_create_profile(db: Session, user_id: int) -> CandidateProfile:
         select(CandidateProfile).where(CandidateProfile.user_id == user_id)
     )
     if not profile:
-        profile = CandidateProfile(user_id=user_id, is_searchable=True)
+        import secrets
+        profile = CandidateProfile(
+            user_id=user_id,
+            is_searchable=True,
+            is_public=True,
+            public_id=secrets.token_urlsafe(16),
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    elif not profile.public_id:
+        import secrets
+        profile.public_id = secrets.token_urlsafe(16)
         db.add(profile)
         db.commit()
         db.refresh(profile)
@@ -161,6 +173,8 @@ def _build_profile_out(db: Session, user: User) -> CandidateProfileOut:
         bio=profile.bio,
         skills=skills,
         is_searchable=profile.is_searchable,
+        is_public=getattr(profile, "is_public", True),
+        public_id=getattr(profile, "public_id", None),
         version=getattr(profile, "version", 1),
         experiences=experiences,
         educations=educations,
@@ -206,7 +220,7 @@ def patch_candidate_profile(
     # Chỉ cập nhật các trường được phép của candidate_profiles (bỏ qua trường lạ)
     allowed_fields = {
         "headline", "birth_date", "location", "linkedin_url",
-        "github_url", "portfolio_url", "bio", "is_searchable"
+        "github_url", "portfolio_url", "bio", "is_searchable", "is_public"
     }
     for field, value in data.items():
         if field in allowed_fields:

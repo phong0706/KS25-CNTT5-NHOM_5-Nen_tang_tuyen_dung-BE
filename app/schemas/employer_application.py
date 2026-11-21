@@ -13,6 +13,7 @@ class ApplicantCandidateOut(BaseModel):
     email: str
     phone: str | None = None
     avatar_url: str | None = None
+    public_id: str | None = None
 
 
 class ApplicantJobOut(BaseModel):
