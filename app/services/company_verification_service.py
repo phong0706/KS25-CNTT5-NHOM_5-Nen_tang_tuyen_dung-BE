@@ -16,6 +16,7 @@ from app.models.company import Company, CompanyStatus
 from app.models.company_verification import CompanyVerification
 from app.models.job import Job
 from app.models.user import User
+from app.services.employer_criteria_service import CRITERION_META, evaluate_employer_criteria
 from app.services.company_verification_rules import (
     VERIF_STATUS_LABELS,
     VERIF_STATUS_SENTENCES,
@@ -46,54 +47,33 @@ def serialize_verification(db: Session, comp: Company, verif: CompanyVerificatio
     v_status = comp.verification_status or "chua_xac_minh"
     sub_user = db.get(User, verif.submitted_by) if (verif and verif.submitted_by) else None
     rev_user = db.get(User, verif.reviewed_by) if (verif and verif.reviewed_by) else None
+    req_dict = None if not verif else {
+        "id": verif.id, "mst": verif.mst, "status": verif.status,
+        "license_original_name": verif.license_original_name, "license_mime_type": verif.license_mime_type,
+        "license_size_bytes": verif.license_size_bytes, "submitted_by": verif.submitted_by,
+        "submitted_by_name": sub_user.full_name if sub_user else f"User #{verif.submitted_by}",
+        "reviewed_by": verif.reviewed_by, "reviewed_by_name": (rev_user.full_name if rev_user else None),
+        "rejection_reason": verif.rejection_reason, "version": verif.version,
+        "submitted_at": verif.submitted_at.isoformat() if verif.submitted_at else None,
+        "reviewed_at": verif.reviewed_at.isoformat() if verif.reviewed_at else None,
+    }
     return {
-        "company_id": comp.id,
-        "company_name": comp.name,
-        "tax_code": comp.tax_code,
-        "verification_status": v_status,
-        "status_label": VERIF_STATUS_LABELS.get(v_status, v_status),
+        "company_id": comp.id, "company_name": comp.name, "tax_code": comp.tax_code,
+        "verification_status": v_status, "status_label": VERIF_STATUS_LABELS.get(v_status, v_status),
         "status_sentence": VERIF_STATUS_SENTENCES.get(v_status, ""),
-        "can_publish_jobs": v_status == "da_xac_minh",
-        "request": None if not verif else {
-            "id": verif.id,
-            "mst": verif.mst,
-            "status": verif.status,
-            "license_original_name": verif.license_original_name,
-            "license_mime_type": verif.license_mime_type,
-            "license_size_bytes": verif.license_size_bytes,
-            "submitted_by": verif.submitted_by,
-            "submitted_by_name": sub_user.full_name if sub_user else f"User #{verif.submitted_by}",
-            "reviewed_by": verif.reviewed_by,
-            "reviewed_by_name": (rev_user.full_name if rev_user else None),
-            "rejection_reason": verif.rejection_reason,
-            "submitted_at": verif.submitted_at.isoformat() if verif.submitted_at else None,
-            "reviewed_at": verif.reviewed_at.isoformat() if verif.reviewed_at else None,
-            "version": verif.version,
-        },
+        "can_publish_jobs": v_status == "da_xac_minh", "request": req_dict,
     }
 
 
 def get_latest_verification(db: Session, company_id: int) -> CompanyVerification | None:
-    return db.scalar(
-        select(CompanyVerification)
-        .where(CompanyVerification.company_id == company_id)
-        .order_by(CompanyVerification.id.desc())
-        .limit(1)
-    )
+    return db.scalar(select(CompanyVerification).where(CompanyVerification.company_id == company_id).order_by(CompanyVerification.id.desc()).limit(1))
 
 
 def submit_verification_request(
     db: Session, comp: Company, actor: User, raw_mst: str, orig_filename: str | None, raw_bytes: bytes,
 ) -> dict:
-    existing_pending = db.scalar(
-        select(CompanyVerification.id).where(CompanyVerification.company_id == comp.id, CompanyVerification.status == "cho_duyet")
-    )
-    if existing_pending is not None:
-        raise_field_error(
-            status.HTTP_409_CONFLICT,
-            "VERIFICATION_ALREADY_PENDING",
-            "Công ty đang có một yêu cầu xác minh chờ duyệt. Vui lòng đợi kết quả xét duyệt trước khi gửi yêu cầu mới.",
-        )
+    if db.scalar(select(CompanyVerification.id).where(CompanyVerification.company_id == comp.id, CompanyVerification.status == "cho_duyet")) is not None:
+        raise_field_error(status.HTTP_409_CONFLICT, "VERIFICATION_ALREADY_PENDING", "Công ty đang có một yêu cầu xác minh chờ duyệt.")
 
     norm_mst = normalize_and_validate_mst(raw_mst)
     mime_type, ext = validate_license_file_bytes(raw_bytes)
@@ -110,9 +90,7 @@ def submit_verification_request(
         license_mime_type=mime_type, license_size_bytes=len(raw_bytes),
         submitted_by=actor.id, version=1,
     )
-    comp.verification_status = "cho_duyet"
-    comp.status = CompanyStatus.PENDING
-    comp.tax_code = norm_mst
+    comp.verification_status, comp.status, comp.tax_code = "cho_duyet", CompanyStatus.PENDING, norm_mst
 
     try:
         db.add(verif)
@@ -141,7 +119,8 @@ def submit_verification_request(
 
 
 def approve_verification_request(
-    db: Session, verif_id: int, actor: User, expected_version: int | None = None, idempotency_key: str | None = None,
+    db: Session, verif_id: int, actor: User, expected_version: int | None = None,
+    idempotency_key: str | None = None, checked_criteria: list[str] | None = None,
 ) -> dict:
     verif = db.get(CompanyVerification, verif_id)
     if not verif:
@@ -152,6 +131,28 @@ def approve_verification_request(
 
     if idempotency_key and verif.idempotency_key == idempotency_key and verif.status == "da_xac_minh":
         return serialize_verification(db, comp, verif)
+
+    c_summary = evaluate_employer_criteria(db, comp)
+    all_codes = set(CRITERION_META.keys())
+    if checked_criteria is not None:
+        missing = all_codes - set(checked_criteria)
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "CRITERIA_NOT_SATISFIED", "message": f"Không thể duyệt: Chưa tick đạt đủ toàn bộ tiêu chí kiểm tra (còn thiếu {len(missing)} tiêu chí)."},
+            )
+        for code in checked_criteria:
+            crit = next((x for x in c_summary["criteria"] if x["code"] == code), None)
+            if not crit or crit["status"] != "dat":
+                write_verif_audit(db, actor, "employer_criterion", comp.id, "MANUAL_VERIFY_CRITERION", None, code, f"{comp.name} · {CRITERION_META.get(code, ('', ''))[0]}", "Admin tick đạt khi duyệt công ty")
+    else:
+        unmet = [c for c in c_summary["criteria"] if c["status"] != "dat"]
+        if unmet or c_summary.get("unchecked_count", 0) > 0:
+            labels = [c["label"] for c in unmet] or ["Còn tiêu chí chưa hoàn tất kiểm tra"]
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "CRITERIA_NOT_SATISFIED", "message": f"Không thể duyệt: Doanh nghiệp vẫn còn tiêu chí chưa kiểm tra hoặc chưa đạt ({', '.join(labels)})."},
+            )
 
     conds = [CompanyVerification.id == verif_id, CompanyVerification.status == "cho_duyet"]
     if expected_version is not None:

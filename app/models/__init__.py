@@ -11,6 +11,7 @@ from app.models.catalog import Industry, Location, Skill  # noqa: F401
 from app.models.company import Company, CompanyStatus  # noqa: F401
 from app.models.company_verification import CompanyVerification  # noqa: F401
 from app.models.company_logo import CompanyLogo  # noqa: F401
+from app.models.company_follow import CompanyFollow  # noqa: F401
 
 # 3. Hồ sơ ứng viên
 from app.models.candidate import (  # noqa: F401
@@ -35,6 +36,7 @@ from app.models.job import (  # noqa: F401
     MetaWorkType,
     SavedJob,
 )
+from app.models.job_status_history import JobStatusHistory  # noqa: F401
 from app.models.job_skill import JobSkill  # noqa: F401
 
 # 5. Hồ sơ ứng tuyển, CV & lịch sử trạng thái

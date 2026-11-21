@@ -1,21 +1,13 @@
-"""API hồ sơ công ty (dành cho employer).
-
-    GET  /api/company/me            Xem hồ sơ công ty của mình
-    PUT  /api/company/me            Sửa thông tin hồ sơ công ty
-    POST /api/company/me/logo       Upload logo (jpg/png, tối đa 2 MB)
-    POST /api/company/me/cover      Upload ảnh bìa (jpg/png, tối đa 2 MB)
-"""
+"""API hồ sơ công ty và xác minh pháp nhân."""
 import uuid
 from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
-
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.crud import company as company_crud
 from app.db.session import get_db
-from app.models.company import CompanyStatus
+from app.models.company import Company, CompanyStatus
 from app.models.company_logo import CompanyLogo
 from app.models.user import User
 from app.schemas.company_schema import (
@@ -24,91 +16,50 @@ from app.schemas.company_schema import (
     CompanyVerificationDecision,
     CompanyVerificationSubmit,
 )
-from app.services.company_logo_service import remove_company_logo, upload_company_logo
+from app.services.company_logo_service import remove_company_logo, upload_company_logo, validate_and_save_company_logo
 from app.services.company_verification_actions import handle_employer_mst_update_if_changed
 
 router = APIRouter(prefix="/company", tags=["Company"])
 admin_router = APIRouter(prefix="/admin/companies", tags=["Company verification - Admin"])
 
-# ------------------------------------------------------------------
-# Hằng số upload
-# ------------------------------------------------------------------
-_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
 _ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
-_MAX_BYTES = settings.MAX_UPLOAD_BYTES  # mặc định 2 MB
+_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
 
-
-# ------------------------------------------------------------------
-# Dependency dùng chung
-# ------------------------------------------------------------------
 
 def _require_employer(current_user: User = Depends(get_current_user)) -> User:
-    """Chỉ cho phép tài khoản có role='employer' truy cập."""
     if current_user.role != "employer":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Chỉ nhà tuyển dụng (employer) mới được thực hiện thao tác này",
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Chỉ nhà tuyển dụng mới được thực hiện thao tác này")
     return current_user
 
 
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Chỉ Admin mới được thực hiện thao tác này")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Chỉ Admin mới được thực hiện thao tác này")
     return current_user
 
 
-def _get_my_company(
-    current_user: User = Depends(_require_employer),
-    db: Session = Depends(get_db),
-):
-    """Lấy công ty của employer đang đăng nhập, trả 404 nếu chưa có."""
+def _get_my_company(current_user: User = Depends(_require_employer), db: Session = Depends(get_db)):
     company = company_crud.get_company_by_employer(db, current_user.id)
     if company is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy hồ sơ công ty cho tài khoản này",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy hồ sơ công ty cho tài khoản này")
     return company
 
 
-# ------------------------------------------------------------------
-# Helper: lưu file upload
-# ------------------------------------------------------------------
-
 def _save_upload(file: UploadFile, subfolder: str) -> str:
-    """Kiểm tra định dạng + dung lượng, lưu file, trả về URL tương đối."""
-    # Kiểm tra định dạng
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in _ALLOWED_EXTENSIONS or file.content_type not in _ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Chỉ chấp nhận file ảnh JPG hoặc PNG",
-        )
-
-    # Đọc nội dung và kiểm tra dung lượng
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Chỉ chấp nhận file ảnh JPG hoặc PNG")
     content = file.file.read()
     if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="File ảnh không được để trống",
-        )
-    if len(content) > _MAX_BYTES:
-        mb = _MAX_BYTES // (1024 * 1024)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File quá lớn. Giới hạn tối đa {mb} MB",
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "File ảnh không được để trống")
+    if len(content) > settings.MAX_UPLOAD_BYTES:
+        mb = settings.MAX_UPLOAD_BYTES // (1024 * 1024)
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File quá lớn. Giới hạn tối đa {mb} MB")
 
-    # Tạo tên file ngẫu nhiên để tránh ghi đè
     unique_name = f"{uuid.uuid4().hex}{suffix}"
     dest_dir = Path(settings.UPLOAD_DIR) / subfolder
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = dest_dir / unique_name
-
-    dest_path.write_bytes(content)
-
-    # Trả về URL tương đối (FE ghép với BASE_URL)
+    (dest_dir / unique_name).write_bytes(content)
     return f"/uploads/{subfolder}/{unique_name}"
 
 
@@ -139,21 +90,13 @@ def get_my_company(
     return company
 
 
-@router.put(
-    "/me",
-    response_model=CompanyResponse,
-    summary="Cập nhật hồ sơ công ty",
-)
+@router.put("/me", response_model=CompanyResponse, summary="Cập nhật hồ sơ công ty")
 def update_my_company(
     data: CompanyProfileUpdate,
     company=Depends(_get_my_company),
     current_user: User = Depends(_require_employer),
     db: Session = Depends(get_db),
 ):
-    """Sửa thông tin hồ sơ công ty.
-
-    Nếu sửa MST của công ty đang da_xac_minh -> chuẩn hóa MST, chuyển về cho_duyet & đưa tin mở sang chờ xác minh lại.
-    """
     if data.tax_code is not None:
         data.tax_code = handle_employer_mst_update_if_changed(db, company, current_user, data.tax_code)
     return company_crud.update_company(db, company, data)
@@ -161,26 +104,37 @@ def update_my_company(
 
 @router.post(
     "/me/logo",
-    summary="Upload logo công ty (PNG/JPEG/WebP, tối đa 2 MB, chờ duyệt)",
+    response_model=CompanyResponse,
+    summary="Upload logo công ty (PNG/WebP, <= 200 KB, chờ duyệt)",
 )
-async def upload_logo(
-    file: UploadFile = File(..., description="File ảnh logo (.png, .jpg, .webp, tối đa 2 MB)"),
+def upload_my_company_logo(
+    file: UploadFile = File(..., description="File ảnh PNG hoặc WebP"),
     company=Depends(_get_my_company),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload logo công ty qua module chuẩn hóa và đưa vào hàng đợi duyệt."""
-    content = await file.read()
-    logo_entry = upload_company_logo(db, company.id, content, current_user.id)
-    return {
-        "status": "pending",
-        "message": "Logo đã được tải lên thành công và đang chờ admin duyệt.",
-        "logo_id": logo_entry.id,
-        "company_id": company.id,
-        "version": logo_entry.version,
-        "logo_url": f"/uploads/logos/{logo_entry.file_key}?v={logo_entry.version}",
-        "logo_url_2x": f"/uploads/logos/{logo_entry.file_key_2x}?v={logo_entry.version}" if logo_entry.file_key_2x else None,
-    }
+    """Upload logo công ty, kiểm tra kích thước/magic bytes, lưu trữ và gửi duyệt admin."""
+    logo_url = validate_and_save_company_logo(file, company.id)
+    comp = company_crud.update_company_logo(db, company, logo_url, current_user.id)
+    try:
+        filename = Path(logo_url).name
+        max_ver = db.query(func.max(CompanyLogo.version)).filter_by(company_id=comp.id).scalar() or comp.logo_version or 0
+        new_logo = CompanyLogo(
+            company_id=comp.id,
+            file_key=filename,
+            file_key_2x=filename,
+            version=max_ver + 1,
+            status="cho_duyet",
+            is_current=False,
+            uploaded_by=current_user.id,
+        )
+        db.add(new_logo)
+        comp.logo_version = max_ver + 1
+        db.commit()
+        db.refresh(comp)
+    except Exception:
+        db.rollback()
+    return comp
 
 
 @router.delete(
@@ -192,9 +146,7 @@ def remove_my_logo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    comp = remove_company_logo(
-        db, company.id, current_user.id, current_user.full_name or current_user.email, current_user.role
-    )
+    comp = company_crud.remove_company_logo(db, company)
     return {
         "status": "success",
         "message": f"Đã gỡ logo của công ty {comp.name}.",
@@ -203,32 +155,36 @@ def remove_my_logo(
     }
 
 
-@router.post(
-    "/me/cover",
-    response_model=CompanyResponse,
-    summary="Upload ảnh bìa công ty (jpg/png, tối đa 2 MB)",
-)
-def upload_cover(
-    file: UploadFile = File(..., description="File ảnh bìa (.jpg hoặc .png, tối đa 2 MB)"),
-    company=Depends(_get_my_company),
+@router.post("/me/logo/remove", response_model=CompanyResponse, summary="Gỡ logo công ty")
+def remove_my_company_logo(company=Depends(_get_my_company), db: Session = Depends(get_db)):
+    return company_crud.remove_company_logo(db, company)
+
+
+@router.post("/{company_id}/logo", response_model=CompanyResponse, summary="Upload logo công ty theo ID")
+def upload_company_logo_by_id(
+    company_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload ảnh bìa công ty.
+    comp = db.get(Company, company_id)
+    if comp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty")
+    if current_user.role != "admin" and comp.employer_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền sửa logo của công ty này")
+    logo_url = validate_and_save_company_logo(file, comp.id)
+    return company_crud.update_company_logo(db, comp, logo_url, current_user.id)
 
-    - Chỉ chấp nhận **JPG / PNG**.
-    - Dung lượng tối đa **2 MB**.
-    """
+
+@router.post("/me/cover", response_model=CompanyResponse, summary="Upload ảnh bìa công ty")
+def upload_cover(file: UploadFile = File(...), company=Depends(_get_my_company), db: Session = Depends(get_db)):
     cover_url = _save_upload(file, "covers")
     return company_crud.update_company_cover(db, company, cover_url)
 
 
-@router.post(
-    "/me/verification-document",
-    response_model=CompanyResponse,
-    summary="Tải ảnh giấy phép kinh doanh",
-)
+@router.post("/me/verification-document", response_model=CompanyResponse, summary="Tải ảnh giấy phép kinh doanh")
 def upload_verification_document(
-    file: UploadFile = File(..., description="Ảnh giấy phép kinh doanh (.jpg hoặc .png)"),
+    file: UploadFile = File(...),
     company=Depends(_get_my_company),
     db: Session = Depends(get_db),
 ):
@@ -238,45 +194,27 @@ def upload_verification_document(
     return company
 
 
-@router.post(
-    "/me/verification",
-    response_model=CompanyResponse,
-    summary="Gửi hồ sơ xác minh công ty",
-)
+@router.post("/me/verification", response_model=CompanyResponse, summary="Gửi hồ sơ xác minh công ty")
 def submit_verification(
     data: CompanyVerificationSubmit,
     company=Depends(_get_my_company),
     db: Session = Depends(get_db),
 ):
     if company.status == CompanyStatus.VERIFIED:
-        raise HTTPException(status_code=409, detail="Công ty đã được xác minh")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Công ty đã được xác minh")
     if not company.verification_document:
-        raise HTTPException(
-            status_code=422,
-            detail="Vui lòng tải ảnh giấy phép kinh doanh trước khi gửi xác minh",
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Vui lòng tải ảnh giấy phép kinh doanh trước khi gửi")
     if not data.tax_code.strip():
-        raise HTTPException(status_code=422, detail="Mã số thuế không được để trống")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Mã số thuế không được để trống")
     return company_crud.submit_company_verification(db, company, data.tax_code)
 
 
-@admin_router.get(
-    "/verifications",
-    response_model=list[CompanyResponse],
-    summary="Danh sách hồ sơ công ty chờ xác minh",
-)
-def list_company_verifications(
-    _admin: User = Depends(_require_admin),
-    db: Session = Depends(get_db),
-):
+@admin_router.get("/verifications", response_model=list[CompanyResponse], summary="Danh sách hồ sơ chờ xác minh")
+def list_company_verifications(_admin: User = Depends(_require_admin), db: Session = Depends(get_db)):
     return company_crud.get_pending_verifications(db)
 
 
-@admin_router.post(
-    "/{company_id}/verification",
-    response_model=CompanyResponse,
-    summary="Duyệt hoặc từ chối hồ sơ xác minh",
-)
+@admin_router.post("/{company_id}/verification", response_model=CompanyResponse, summary="Duyệt / từ chối xác minh")
 def review_company_verification(
     company_id: int,
     data: CompanyVerificationDecision,
@@ -285,17 +223,13 @@ def review_company_verification(
 ):
     company = company_crud.get_company_for_review(db, company_id)
     if company is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy công ty")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty")
     if company.status != CompanyStatus.PENDING:
-        raise HTTPException(status_code=409, detail="Hồ sơ công ty không còn ở trạng thái chờ duyệt")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Hồ sơ công ty không còn ở trạng thái chờ duyệt")
     if company.verification_submitted_at is None:
-        raise HTTPException(status_code=409, detail="Công ty chưa gửi hồ sơ xác minh")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Công ty chưa gửi hồ sơ xác minh")
     if data.status == "REJECTED" and not (data.reason and data.reason.strip()):
-        raise HTTPException(status_code=422, detail="Vui lòng nhập lý do từ chối")
-
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Vui lòng nhập lý do từ chối")
     return company_crud.decide_company_verification(
-        db,
-        company,
-        status=CompanyStatus(data.status),
-        reason=data.reason.strip() if data.reason else None,
+        db, company, status=CompanyStatus(data.status), reason=data.reason.strip() if data.reason else None
     )

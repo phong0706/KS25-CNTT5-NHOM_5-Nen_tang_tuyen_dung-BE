@@ -169,7 +169,7 @@ def open_admin_candidate_cv_file(
 def list_admin_audit_logs(
     target_type: str = Query("all"),
     q: str = Query("", max_length=100),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(250, ge=1, le=500),
     current_user: User = Depends(role_required("admin", "operator")),
     db: Session = Depends(get_db),
 ):

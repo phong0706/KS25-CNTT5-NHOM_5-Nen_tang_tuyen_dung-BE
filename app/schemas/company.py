@@ -85,6 +85,7 @@ class PublicCompanyDetailOut(BaseModel):
     founded_year: int | None = None
     website: str | None = None
     is_verified: bool = False
+    verification_status: str = "chua_xac_minh"
     verified_at: datetime | None = None
     updated_at: datetime | None = None
     open_jobs: int = 0

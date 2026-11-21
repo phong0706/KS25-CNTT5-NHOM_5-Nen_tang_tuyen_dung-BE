@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, role_required
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.company_logo import CompanyLogo
@@ -18,24 +18,19 @@ from app.models.company_verification import CompanyVerification
 from app.models.job import Job
 from app.models.user import User
 from app.routers.admin_companies_cvs import _serialize_company
-from app.services.company_verification_actions import (
-    reject_verification_request,
-    revoke_company_verification,
-)
+from app.services.company_verification_actions import reject_verification_request, revoke_company_verification
 from app.services.company_verification_rules import VERIF_STATUS_LABELS
 from app.services.company_verification_service import (
-    LICENSE_PRIVATE_DIR,
-    approve_verification_request,
-    get_latest_verification,
-    serialize_verification,
-    write_verif_audit,
+    LICENSE_PRIVATE_DIR, approve_verification_request, get_latest_verification, serialize_verification, write_verif_audit,
 )
+from app.services.employer_criteria_service import evaluate_employer_criteria, manual_approve_criterion
 
 router = APIRouter(prefix="/admin", tags=["Admin Company Verifications"])
 
 
 class ApproveBodyIn(BaseModel):
     version: Optional[int] = None
+    checked_criteria: Optional[list[str]] = None
 
 
 class ReasonActionBodyIn(BaseModel):
@@ -57,6 +52,8 @@ def list_admin_company_verifications(
     request: Request,
     verif_status: str = Query("all"),
     logo_status: str = Query("all"),
+    has_unchecked: bool = Query(False),
+    has_open_reports: bool = Query(False),
     q: str = Query("", max_length=120),
     current_user: User = Depends(_require_admin_or_operator),
     db: Session = Depends(get_db),
@@ -111,6 +108,12 @@ def list_admin_company_verifications(
         base_info["verification_status"] = verif_data["verification_status"]
         base_info["verification_label"] = verif_data["status_label"]
         base_info["verification"] = verif_data["request"]
+        criteria_data = evaluate_employer_criteria(db, comp)
+        base_info["criteria_summary"] = criteria_data
+        if has_unchecked and criteria_data["unchecked_count"] <= 0:
+            continue
+        if has_open_reports and criteria_data["open_reports_count"] <= 0:
+            continue
         items.append(base_info)
 
     return {
@@ -168,7 +171,7 @@ def post_admin_approve_verification(
     current_user: User = Depends(_require_admin_or_operator),
     db: Session = Depends(get_db),
 ):
-    return approve_verification_request(db, verif_id, current_user, body.version, idempotency_key)
+    return approve_verification_request(db, verif_id, current_user, body.version, idempotency_key, body.checked_criteria)
 
 
 @router.post("/company-verifications/{verif_id}/reject", summary="Admin từ chối yêu cầu xác minh (lý do bắt buộc >= 10 ký tự)")
@@ -191,3 +194,14 @@ def post_admin_revoke_verification(
     db: Session = Depends(get_db),
 ):
     return revoke_company_verification(db, company_id, current_user, body.reason, body.version, idempotency_key)
+
+
+@router.post("/companies/{company_id}/criteria/{criterion_code}/approve", summary="Admin duyệt thủ công một tiêu chí xác thực (bắt buộc lý do)")
+def post_admin_manual_approve_criterion(
+    company_id: int,
+    criterion_code: str,
+    body: ReasonActionBodyIn,
+    current_user: User = Depends(_require_admin_or_operator),
+    db: Session = Depends(get_db),
+):
+    return manual_approve_criterion(db, company_id, criterion_code, body.reason, current_user)

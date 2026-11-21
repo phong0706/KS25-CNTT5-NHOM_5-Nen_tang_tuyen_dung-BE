@@ -20,7 +20,9 @@ from app.routers import (
     admin_applications,
     admin_audit_and_cvs,
     admin_companies_cvs,
+    admin_company_logos,
     admin_interview,
+    admin_jobs,
     admin_verifications,
     applications,
     auth,
@@ -30,6 +32,7 @@ from app.routers import (
     candidate_cv_documents,
     candidate_cvs,
     candidate_detail,
+    candidate_followed_companies,
     candidate_job_matches,
     candidate_profile,
     candidate_recommended,
@@ -41,6 +44,7 @@ from app.routers import (
     cv,
     employer_applications,
     employer_interviews,
+    employer_job_moderation,
     employer_jobs,
     employer_verification,
     health,
@@ -58,8 +62,12 @@ from app.routers import (
     salary_insights,
     search_insights,
     skills,
+    statistics,
     tools,
     users,
+    public_home,
+    admin_home_salary,
+    admin_home_companies,
 )
 
 # Console Windows mặc định dùng cp1252 -> print() tiếng Việt sẽ ném UnicodeEncodeError
@@ -147,6 +155,7 @@ app.include_router(meta.router, prefix="/api")
 app.include_router(industries.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
+app.include_router(employer_job_moderation.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
 app.include_router(employer_interviews.router, prefix="/api")
@@ -163,6 +172,7 @@ app.include_router(applications.router, prefix="/api")
 app.include_router(candidate_applications.router, prefix="/api")
 app.include_router(candidate_cvs.router, prefix="/api")
 app.include_router(candidate_saved_jobs.router, prefix="/api")
+app.include_router(candidate_followed_companies.router, prefix="/api")
 app.include_router(candidate_recommended.router, prefix="/api")
 app.include_router(candidate_job_matches.router, prefix="/api")
 app.include_router(candidate_apply.router, prefix="/api")
@@ -175,6 +185,8 @@ app.include_router(admin_applications.router, prefix="/api")
 app.include_router(admin_companies_cvs.router, prefix="/api")
 app.include_router(admin_audit_and_cvs.router, prefix="/api")
 app.include_router(admin_verifications.router, prefix="/api")
+app.include_router(admin_jobs.router, prefix="/api")
+app.include_router(admin_company_logos.router, prefix="/api")
 app.include_router(candidate_cover_letters.router, prefix="/api")
 app.include_router(candidate_cv_documents.router, prefix="/api")
 app.include_router(matching.router)
@@ -184,8 +196,13 @@ app.include_router(salary_insights.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(career_path.router, prefix="/api")
 app.include_router(career_path.router)
+app.include_router(public_home.router, prefix="/api")
+app.include_router(admin_home_salary.router, prefix="/api")
+app.include_router(admin_home_companies.router, prefix="/api")
 # Báo cáo vi phạm
 app.include_router(reports.router, prefix="/api")
+# Thống kê Dashboard
+app.include_router(statistics.router, prefix="/api")
 # WebSocket & Realtime tickets
 from app.realtime.router import router as realtime_router
 app.include_router(realtime_router)

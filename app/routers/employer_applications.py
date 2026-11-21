@@ -3,17 +3,19 @@ Quy tắc: Kiểm tra quyền backend (401/403/404), < 200 dòng.
 """
 import json
 import os
+from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
+from app.crud.application import get_status_history_by_application
 from app.db.session import get_db
 from app.models.application import (
-    Application, ApplicationNote, ApplicationStatusHistory, CV, Interview,
+    Application, ApplicationNote, ApplicationStatus, ApplicationStatusHistory, CV, Interview,
     MetaApplicationStatus, MetaRejectionReason,
 )
 from app.models.candidate import CandidateProfile
@@ -27,21 +29,71 @@ from app.schemas.employer_application import (
     EmployerApplicationItemOut, EmployerApplicationListOut,
     EmployerInterviewScheduleIn, EmployerStatusUpdateIn,
 )
+from app.services.interview_service import check_interview_overlap
 from app.services.notification import notify_application_status_changed, notify_interview
 
 router = APIRouter(prefix="/employer/applications", tags=["Employer Applications"])
 
-ALLOWED_TRANSITIONS: dict[str, list[str]] = {
-    "submitted": ["screening", "rejected"],
-    "screening": ["interview", "rejected"],
-    "interview": ["offered", "rejected"],
-    "offered": ["rejected"],
-    "rejected": [],
-    "withdrawn": [],
+ALLOWED_TRANSITIONS = {
+    ApplicationStatus.SUBMITTED: (ApplicationStatus.REVIEWING,),
+    ApplicationStatus.REVIEWING: (ApplicationStatus.INTERVIEW,),
+    ApplicationStatus.INTERVIEW: (ApplicationStatus.OFFERED, ApplicationStatus.REJECTED),
 }
+
+def _normalize_status(status: str) -> str:
+    status = status.strip().upper()
+    return ApplicationStatus.REVIEWING.value if status == "SCREENING" else status
+
+
+def _legacy_status(status: str) -> str:
+    return "screening" if status == ApplicationStatus.REVIEWING else status.lower()
+
+
+def _stored_status(status: str, previous: str) -> str:
+    return _legacy_status(status) if previous.islower() else status
+
+
+def _company_job_ids(employer_id: int):
+    return (
+        select(Job.id)
+        .join(Company, Job.company_id == Company.id)
+        .where(Company.employer_id == employer_id)
+    )
+
+
+def _company_application(app_id: int, employer_id: int):
+    return select(Application).where(
+        Application.id == app_id, Application.job_id.in_(_company_job_ids(employer_id)),
+    )
+
+
+def _candidate_user_id(db: Session, application: Application) -> int | None:
+    if application.candidate_id is not None:
+        return application.candidate_id
+    return db.scalar(select(CandidateProfile.user_id).where(CandidateProfile.id == application.candidate_profile_id))
+
+
+def _candidate_profile_join():
+    return or_(
+        CandidateProfile.user_id == Application.candidate_id,
+        and_(
+            Application.candidate_id.is_(None),
+            CandidateProfile.id == Application.candidate_profile_id,
+        ),
+    )
+
 
 def _smap(db: Session) -> dict[str, MetaApplicationStatus]:
     return {r.slug: r for r in db.scalars(select(MetaApplicationStatus)).all()}
+
+def _status_meta(status: str, statuses: dict[str, MetaApplicationStatus]) -> tuple[str, str]:
+    normalized = _normalize_status(status)
+    meta = (
+        statuses.get(status) or statuses.get(_legacy_status(normalized))
+        or statuses.get(normalized.lower()) or statuses.get(normalized)
+    )
+    return (meta.name, meta.tone) if meta else (status, "neutral")
+
 
 def _iv_info(app_row) -> InterviewInfo | None:
     if not app_row.interview_at:
@@ -88,8 +140,7 @@ def get_unviewed_count(
 ):
     count = db.scalar(
         select(func.count(Application.id))
-        .join(Job, Application.job_id == Job.id)
-        .where(Job.employer_id == current_user.id, Application.viewed_at.is_(None))
+        .where(Application.job_id.in_(_company_job_ids(current_user.id)), Application.viewed_at.is_(None))
     ) or 0
     return {"count": count}
 
@@ -104,58 +155,62 @@ def list_employer_applications(
     current_user=Depends(role_required("recruiter", "employer")),
     db: Session = Depends(get_db),
 ):
-    sm = _smap(db)
+    company_job_ids = _company_job_ids(current_user.id)
     my_jobs_rows = db.execute(
-        select(Job.id, Job.title).where(Job.employer_id == current_user.id).order_by(Job.created_at.desc())
+        select(Job.id, Job.title).where(Job.id.in_(company_job_ids)).order_by(Job.created_at.desc())
     ).all()
     my_jobs = [ApplicantJobOut(id=r.id, title=r.title) for r in my_jobs_rows]
-    my_job_ids = [j.id for j in my_jobs]
+    if job_id is not None and all(job.id != job_id for job in my_jobs):
+        raise HTTPException(status_code=404, detail="Không tìm thấy tin tuyển dụng của công ty.")
 
-    if not my_job_ids:
+    if not my_jobs:
         return EmployerApplicationListOut(
             items=[], tabs=[AppTabOut(key="all", label="Tất cả", count=0)], jobs=[], total=0, page=page, page_size=page_size
         )
 
-    count_q = select(Application.status, func.count(Application.id)).join(Job, Application.job_id == Job.id).where(Job.employer_id == current_user.id)
-    if job_id and job_id in my_job_ids:
-        count_q = count_q.where(Application.job_id == job_id)
+    scope = [Application.job_id.in_(company_job_ids)]
+    if job_id is not None:
+        scope.append(Application.job_id == job_id)
 
-    raw_counts = dict(db.execute(count_q.group_by(Application.status)).all())
-    tabs = [AppTabOut(key="all", label="Tất cả", count=sum(raw_counts.values()))]
+    sm = _smap(db)
+    count_q = select(Application.status, func.count(Application.id)).where(*scope).group_by(Application.status)
+    counts = Counter()
+    for app_status, count in db.execute(count_q):
+        counts[_normalize_status(app_status)] += count
+    tabs = [AppTabOut(key="all", label="Tất cả", count=sum(counts.values()))]
     for meta in sorted(sm.values(), key=lambda m: m.sort_order):
-        tabs.append(AppTabOut(key=meta.slug, label=meta.name, count=raw_counts.get(meta.slug, 0)))
+        tabs.append(AppTabOut(key=meta.slug, label=meta.name, count=counts[_normalize_status(meta.slug)]))
 
     base = (
         select(Application, Job.title.label("job_title"), Job.skills.label("job_skills"), User, CandidateProfile.skills_json)
         .join(Job, Application.job_id == Job.id)
-        .join(User, Application.candidate_id == User.id)
-        .outerjoin(CandidateProfile, CandidateProfile.user_id == User.id)
-        .where(Job.employer_id == current_user.id)
+        .outerjoin(CandidateProfile, _candidate_profile_join())
+        .join(User, User.id == func.coalesce(Application.candidate_id, CandidateProfile.user_id))
+        .where(*scope)
     )
-    if job_id and job_id in my_job_ids:
-        base = base.where(Application.job_id == job_id)
-    if status_filter and status_filter != "all":
-        base = base.where(Application.status == status_filter)
+    normalized_filter = _normalize_status(status_filter)
+    if normalized_filter and normalized_filter != "ALL":
+        status_aliases = (normalized_filter.lower(), _legacy_status(normalized_filter))
+        base = base.where(func.lower(Application.status).in_(status_aliases))
     if q.strip():
         kw = q.strip()
         base = base.where(User.full_name.ilike(f"%{kw}%") | User.email.ilike(f"%{kw}%") | Job.title.ilike(f"%{kw}%"))
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
-    all_rows = db.execute(base.order_by(Application.created_at.desc())).all()
+    all_rows = db.execute(base.order_by(Application.created_at.desc(), Application.id.desc())).all()
 
-    items = [
-        EmployerApplicationItemOut(
+    items = []
+    for app_row, j_title, j_skills, cand, c_skills_json in all_rows:
+        status_label, status_tone = _status_meta(app_row.status, sm)
+        items.append(EmployerApplicationItemOut(
             id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title),
             candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
             cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
-            status=app_row.status, status_label=sm.get(app_row.status).name if sm.get(app_row.status) else app_row.status,
-            status_tone=sm.get(app_row.status).tone if sm.get(app_row.status) else "neutral",
+            status=app_row.status, status_label=status_label, status_tone=status_tone,
             is_viewed=bool(app_row.viewed_at is not None),
             match_score=_calc_match_score(j_skills, c_skills_json),
             created_at=app_row.created_at, updated_at=app_row.updated_at, interview=_iv_info(app_row),
-        )
-        for app_row, j_title, j_skills, cand, c_skills_json in all_rows
-    ]
+        ))
 
     if sort == "match_score":
         items.sort(key=lambda x: (x.match_score, x.created_at), reverse=True)
@@ -174,36 +229,36 @@ def get_employer_application_detail(
             Company.slug.label("comp_slug"), Company.name.label("comp_name"), User, CandidateProfile.skills_json,
         )
         .join(Job, Application.job_id == Job.id)
-        .outerjoin(Company, Job.company_id == Company.id)
-        .join(User, Application.candidate_id == User.id)
-        .outerjoin(CandidateProfile, CandidateProfile.user_id == User.id)
-        .where(Application.id == app_id, Job.employer_id == current_user.id)
+        .join(Company, Job.company_id == Company.id)
+        .outerjoin(CandidateProfile, _candidate_profile_join())
+        .join(User, User.id == func.coalesce(Application.candidate_id, CandidateProfile.user_id))
+        .where(Application.id == app_id, Company.employer_id == current_user.id)
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không thuộc quyền quản lý.")
 
     app_row, j_title, j_skills, c_slug, c_name, cand, c_skills_json = row
     sm = _smap(db)
-    history_rows = db.scalars(
-        select(ApplicationStatusHistory).where(ApplicationStatusHistory.application_id == app_id).order_by(ApplicationStatusHistory.changed_at.asc())
-    ).all()
-    history = [
-        StatusHistoryItem(
-            status=h.status, status_label=sm.get(h.status).name if sm.get(h.status) else h.status,
-            status_tone=sm.get(h.status).tone if sm.get(h.status) else "neutral", note=h.note, changed_at=h.changed_at,
-        ) for h in history_rows
-    ]
+    history = []
+    for entry in get_status_history_by_application(db, app_id):
+        status = entry.status or entry.new_status
+        if status:
+            label, tone = _status_meta(status, sm)
+            history.append(StatusHistoryItem(
+                status=status, status_label=label, status_tone=tone, note=entry.note, changed_at=entry.changed_at,
+            ))
+    status_label, status_tone = _status_meta(app_row.status, sm)
+    allowed = ALLOWED_TRANSITIONS.get(_normalize_status(app_row.status), ())
 
     return EmployerApplicationDetailOut(
         id=app_row.id, job=ApplicantJobOut(id=app_row.job_id, title=j_title, company_slug=c_slug, company_name=c_name),
         candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
         cv_id=app_row.cv_id, cv_name=app_row.cv_name_snapshot, cover_letter=app_row.cover_letter,
-        status=app_row.status, status_label=sm.get(app_row.status).name if sm.get(app_row.status) else app_row.status,
-        status_tone=sm.get(app_row.status).tone if sm.get(app_row.status) else "neutral",
+        status=app_row.status, status_label=status_label, status_tone=status_tone,
         is_viewed=bool(app_row.viewed_at is not None),
         match_score=_calc_match_score(j_skills, c_skills_json),
         created_at=app_row.created_at, updated_at=app_row.updated_at, interview=_iv_info(app_row), history=history,
-        allowed_transitions=ALLOWED_TRANSITIONS.get(app_row.status, []),
+        allowed_transitions=[_stored_status(status, app_row.status) for status in allowed],
     )
 
 
@@ -217,8 +272,9 @@ def get_application_cv_file(
     db: Session = Depends(get_db),
 ):
     row = db.execute(
-        select(Application, Job.employer_id)
+        select(Application, Company.employer_id)
         .join(Job, Application.job_id == Job.id)
+        .outerjoin(Company, Job.company_id == Company.id)
         .where(Application.id == app_id)
     ).first()
     if not row:
@@ -268,7 +324,7 @@ def get_application_cv_file(
 def mark_application_viewed(
     app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
-    app = db.scalar(select(Application).join(Job, Application.job_id == Job.id).where(Application.id == app_id, Job.employer_id == current_user.id))
+    app = db.scalar(_company_application(app_id, current_user.id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
     if app.viewed_at is None:
@@ -280,7 +336,7 @@ def mark_application_viewed(
 def list_application_notes(
     app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
-    app = db.scalar(select(Application).join(Job, Application.job_id == Job.id).where(Application.id == app_id, Job.employer_id == current_user.id))
+    app = db.scalar(_company_application(app_id, current_user.id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
     rows = db.execute(
@@ -295,7 +351,7 @@ def list_application_notes(
 def add_application_note(
     app_id: int, body: ApplicationNoteCreateIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
-    app = db.scalar(select(Application).join(Job, Application.job_id == Job.id).where(Application.id == app_id, Job.employer_id == current_user.id))
+    app = db.scalar(_company_application(app_id, current_user.id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
     note = ApplicationNote(application_id=app.id, author_id=current_user.id, content=body.content.strip())
@@ -308,57 +364,74 @@ def add_application_note(
 def update_application_status(
     app_id: int, body: EmployerStatusUpdateIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
-    app = db.scalar(select(Application).join(Job, Application.job_id == Job.id).where(Application.id == app_id, Job.employer_id == current_user.id))
+    app = db.scalar(_company_application(app_id, current_user.id).with_for_update())
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
-    sm = _smap(db)
-    if body.status not in sm:
+
+    target = _normalize_status(body.status)
+    if target not in {status.value for status in ApplicationStatus}:
         raise HTTPException(status_code=422, detail="Trạng thái không hợp lệ.")
 
-    allowed = ALLOWED_TRANSITIONS.get(app.status, [])
-    if body.status not in allowed:
-        current_name = sm.get(app.status).name if sm.get(app.status) else app.status
-        target_name = sm.get(body.status).name if sm.get(body.status) else body.status
-        raise HTTPException(status_code=409, detail=f"Không thể chuyển từ trạng thái '{current_name}' sang '{target_name}' theo quy trình tuyển dụng.")
-
-    app.status = body.status
-    app.updated_at = datetime.now(timezone.utc)
+    old_status = app.status
+    new_status = _stored_status(target, old_status)
+    sm = _smap(db)
+    target_label, _ = _status_meta(new_status, sm)
+    if target not in ALLOWED_TRANSITIONS.get(_normalize_status(old_status), ()):
+        current_label, _ = _status_meta(old_status, sm)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Không thể chuyển từ trạng thái '{current_label}' sang '{target_label}' theo quy trình tuyển dụng.",
+        )
 
     note_text = body.note
-    if body.status == "rejected" and body.rejection_reason_slug:
+    if target == ApplicationStatus.REJECTED and body.rejection_reason_slug:
         reason_row = db.scalar(select(MetaRejectionReason).where(MetaRejectionReason.slug == body.rejection_reason_slug))
         if reason_row:
-            note_text = f"Lý do từ chối: {reason_row.name}. " + (body.note or "")
+            rejection_note = f"Lý do từ chối: {reason_row.name}. " + (body.note or "")
+            if len(rejection_note) <= 500:
+                note_text = rejection_note
     if not note_text:
-        note_text = f"Nhà tuyển dụng chuyển trạng thái thành: {sm[body.status].name}"
+        note_text = f"Nhà tuyển dụng chuyển trạng thái thành: {target_label}"
 
-    db.add(ApplicationStatusHistory(application_id=app.id, status=body.status, note=note_text))
-
+    candidate_id = _candidate_user_id(db, app)
     job_title = db.scalar(select(Job.title).where(Job.id == app.job_id)) or ""
-    notify_application_status_changed(
-        db, candidate_id=app.candidate_id, status=body.status, status_label=sm[body.status].name,
-        job_title=job_title, application_id=app.id, actor_id=current_user.id, note=body.note,
-    )
+    app.status = new_status
+    app.updated_at = datetime.now(timezone.utc)
+    if body.note is not None:
+        app.employer_notes = body.note
+    db.add(ApplicationStatusHistory(
+        application_id=app.id, status=new_status, old_status=old_status, new_status=new_status,
+        changed_by_user_id=current_user.id, note=note_text,
+    ))
+    notification = None
+    if candidate_id is not None:
+        notification = notify_application_status_changed(
+            db, candidate_id=candidate_id, status=new_status, status_label=target_label,
+            job_title=job_title, application_id=app.id, actor_id=current_user.id, note=body.note,
+        )
+    if notification is None:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Không thể gửi thông báo cập nhật hồ sơ cho ứng viên.")
     db.commit()
-    return {"message": "Cập nhật trạng thái hồ sơ thành công!", "status": body.status}
+    return {"message": "Cập nhật trạng thái hồ sơ thành công!", "status": new_status}
 
 @router.post("/{app_id}/interview", summary="Lên lịch hẹn phỏng vấn")
 def schedule_interview(
     app_id: int, body: EmployerInterviewScheduleIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
 ):
-    app = db.scalar(select(Application).join(Job, Application.job_id == Job.id).where(Application.id == app_id, Job.employer_id == current_user.id))
+    app = db.scalar(_company_application(app_id, current_user.id).with_for_update())
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
 
-    allowed = ALLOWED_TRANSITIONS.get(app.status, [])
-    if "interview" not in allowed and app.status != "interview":
-        sm = _smap(db)
-        current_name = sm.get(app.status).name if sm.get(app.status) else app.status
+    old_status = app.status
+    current_status = _normalize_status(old_status)
+    allowed = ALLOWED_TRANSITIONS.get(current_status, ())
+    if current_status != ApplicationStatus.INTERVIEW and ApplicationStatus.INTERVIEW not in allowed:
+        current_name, _ = _status_meta(old_status, _smap(db))
         raise HTTPException(status_code=409, detail=f"Không thể lên lịch phỏng vấn cho hồ sơ đang ở trạng thái '{current_name}'.")
 
     if not body.force:
-        from app.routers.employer_interviews import _check_overlap
-        overlap = _check_overlap(db, current_user.id, body.scheduled_at, body.duration_min)
+        overlap = check_interview_overlap(db, current_user.id, body.scheduled_at, body.duration_min)
         if overlap:
             raise HTTPException(
                 status_code=409,
@@ -390,16 +463,19 @@ def schedule_interview(
     app.interview_at = body.scheduled_at
     app.interview_mode = body.mode
     app.interview_location = body.location_or_link
-    app.status = "interview"
+    app.status = _stored_status(ApplicationStatus.INTERVIEW.value, old_status)
     app.updated_at = datetime.now(timezone.utc)
 
     loc_str = f" tại {body.location_or_link}" if body.location_or_link else ""
     note_text = body.note or f"Lên lịch phỏng vấn {body.mode}{loc_str}"
-    db.add(ApplicationStatusHistory(application_id=app.id, status="interview", note=note_text))
+    db.add(ApplicationStatusHistory(
+        application_id=app.id, status=app.status, old_status=old_status, new_status=app.status,
+        changed_by_user_id=current_user.id, note=note_text,
+    ))
 
     job_title = db.scalar(select(Job.title).where(Job.id == app.job_id)) or ""
     notify_interview(
-        db, candidate_id=app.candidate_id, application_id=app.id, job_title=job_title,
+        db, candidate_id=_candidate_user_id(db, app), application_id=app.id, job_title=job_title,
         interview_at=body.scheduled_at, interview_mode=body.mode,
         interview_location=body.location_or_link, actor_id=current_user.id,
     )

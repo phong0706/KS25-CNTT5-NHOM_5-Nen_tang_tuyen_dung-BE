@@ -27,7 +27,7 @@ class EmployerApplicationItemOut(BaseModel):
     job: ApplicantJobOut
     candidate: ApplicantCandidateOut
     cv_id: int | None = None
-    cv_name: str
+    cv_name: str | None = None
     cover_letter: str | None = None
     status: str
     status_label: str
@@ -53,7 +53,7 @@ class EmployerApplicationDetailOut(BaseModel):
     job: ApplicantJobOut
     candidate: ApplicantCandidateOut
     cv_id: int | None = None
-    cv_name: str
+    cv_name: str | None = None
     cover_letter: str | None = None
     status: str
     status_label: str
@@ -113,8 +113,8 @@ class InterviewItemOut(BaseModel):
 
 
 class EmployerStatusUpdateIn(BaseModel):
-    status: str
-    note: str | None = None
+    status: str = Field(max_length=32)
+    note: str | None = Field(default=None, max_length=500)
     rejection_reason_slug: str | None = None
 
 
