@@ -44,9 +44,7 @@ def search_public_jobs(
     )
 
 
-@router.get("/companies/featured", response_model=list[FeaturedCompanyOut], summary="Công ty nổi bật theo số tin đang tuyển")
-def list_featured_companies(limit: int = Query(8, ge=1, le=20), db: Session = Depends(get_db)):
-    return get_featured_companies_data(db, limit)
+# Endpoint /companies/featured do router companies.py phụ trách để tránh trùng lặp route.
 
 
 @router.get("/stats/home", response_model=HomeStatsOut, summary="Thống kê thật cho trang chủ")
