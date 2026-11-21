@@ -59,6 +59,7 @@ from app.routers import (
     salary_insights,
     search_insights,
     skills,
+    statistics,
     tools,
     users,
     public_home,
@@ -186,6 +187,8 @@ app.include_router(admin_home_salary.router, prefix="/api")
 app.include_router(admin_home_companies.router, prefix="/api")
 # Báo cáo vi phạm
 app.include_router(reports.router, prefix="/api")
+# Thống kê Dashboard
+app.include_router(statistics.router, prefix="/api")
 
 
 @app.get("/")

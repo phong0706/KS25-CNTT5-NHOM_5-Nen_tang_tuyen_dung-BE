@@ -142,7 +142,25 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id).where(*conds).order_by(*order_clauses)
     )
     if distinct_company:
-        ranked = select(Job.id.label("jid"), func.row_number().over(partition_by=Job.company_id, order_by=[func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]).label("rn")).where(*conds).subquery()
+        ranked = (
+            select(
+                Job.id.label("jid"),
+                func.row_number()
+                .over(
+                    partition_by=Job.company_id,
+                    order_by=[func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()],
+                )
+                .label("rn"),
+            )
+            .select_from(Job)
+            .outerjoin(Company, Job.company_id == Company.id)
+            .outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
+            .outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
+            .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
+            .outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
+            .where(*conds)
+            .subquery()
+        )
         stmt = stmt.add_columns(ranked.c.rn).join(ranked, ranked.c.jid == Job.id).where(ranked.c.rn == 1)
 
     if use_relevant_sort:
