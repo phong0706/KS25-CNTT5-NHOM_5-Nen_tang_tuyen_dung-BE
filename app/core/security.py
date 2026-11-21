@@ -21,15 +21,21 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Kiểm tra mật khẩu người dùng nhập có khớp với mật khẩu trong DB."""
+    """Kiểm tra mật khẩu người dùng nhập có khớp với mật khẩu trong DB.
+
+    Chỉ chấp nhận bcrypt hash hợp lệ ($2a$/$2b$/$2y$).
+    Từ chối mọi giá trị không phải bcrypt — bao gồm plaintext — để ngăn
+    tấn công bypassing khi DB chứa giá trị không phải hash (SEC-CRIT-01).
+    """
     if not hashed:
         return False
-    if hashed.startswith(("$2a$", "$2b$", "$2y$")):
-        try:
-            return bcrypt.checkpw(plain.encode(), hashed.encode())
-        except ValueError:
-            return False
-    return plain == hashed
+    if not hashed.startswith(("$2a$", "$2b$", "$2y$")):
+        # Không phải bcrypt hash → từ chối ngay, không so sánh plaintext
+        return False
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except ValueError:
+        return False
 
 
 def create_access_token(user_id: int, role: str, token_version: int = 1) -> str:
