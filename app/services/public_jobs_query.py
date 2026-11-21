@@ -162,8 +162,11 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
     else:
         order_clauses = [func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
 
+    logo_expr = case((Company.logo_status.in_(["approved", "active"]), func.coalesce(Company.logo_url, Company.logo)), else_=None).label("company_logo")
+    logo_2x_expr = case((Company.logo_status.in_(["approved", "active"]), Company.logo_url_2x), else_=None).label("company_logo_2x")
+
     stmt = (
-        select(Job, Company.name.label("company_name"), Company.slug.label("company_slug"), MetaLocation.slug.label("loc_slug"), MetaLevel.slug.label("lvl_slug"), MetaWorkType.slug.label("wt_slug"), MetaCategory.name.label("cat_name"), MetaCategory.slug.label("cat_slug"))
+        select(Job, Company.name.label("company_name"), Company.slug.label("company_slug"), logo_expr, logo_2x_expr, MetaLocation.slug.label("loc_slug"), MetaLevel.slug.label("lvl_slug"), MetaWorkType.slug.label("wt_slug"), MetaCategory.name.label("cat_name"), MetaCategory.slug.label("cat_slug"))
         .outerjoin(Company, Job.company_id == Company.id).outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
         .outerjoin(MetaLevel, Job.level_id == MetaLevel.id).outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id).where(*conds).order_by(*order_clauses)
@@ -213,6 +216,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         sal_insight, _ = get_job_salary_insight(job, peers_salaries_map)
         items.append(PublicJobCardOut(
             id=job.id, title=(job.title or "").replace("[Seed]", "").strip(), company_id=job.company_id, company_slug=r.company_slug, company_name=r.company_name or "Doanh nghiệp công nghệ",
+            company_logo=r.company_logo, company_logo_2x=r.company_logo_2x,
             location=job.location, location_slug=r.loc_slug, level=job.level, level_slug=r.lvl_slug, work_type=job.work_type, work_type_slug=r.wt_slug,
             category=r.cat_name, category_slug=r.cat_slug, salary_min=job.salary_min, salary_max=job.salary_max, is_salary_negotiable=job.is_salary_negotiable,
             skills=list(job.skills or []), published_at=job.published_at, created_at=job.created_at, is_saved=job.id in saved_ids,
