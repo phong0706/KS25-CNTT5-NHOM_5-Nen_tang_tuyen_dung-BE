@@ -19,13 +19,13 @@ def make_docx(entries=None, uncomp_size=None):
     b = io.BytesIO()
     with zipfile.ZipFile(b, "w", compression=zipfile.ZIP_DEFLATED if uncomp_size else zipfile.ZIP_STORED) as z:
         z.writestr("[Content_Types].xml", b"<Types/>")
-        z.writestr("word/document.xml", b"0" * uncomp_size if uncomp_size else b"<w:doc/>")
+        z.writestr("word/document.xml", b"0" * (uncomp_size or 1200))
         if entries:
             for i in range(entries): z.writestr(f"word/part_{i}.xml", b"x")
     return b.getvalue()
 
-PDF_B = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
-DOC_B = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 100
+PDF_B = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n" + b"X" * 1024
+DOC_B = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 1024
 
 @pytest.fixture
 def db():
@@ -121,9 +121,7 @@ def test_delete_active_cv_and_reassign_default(db):
     app_record = Application(job_id=job.id, candidate_id=c.id, cv_id=cv1_id, cv_name_snapshot="cv1.pdf", status="REVIEWING")
     db.add(app_record); db.commit()
     del_res = client.delete(f"/api/candidate/cvs/{cv1_id}", headers=h)
-    assert del_res.status_code == 409 and "active_jobs" in del_res.json()["detail"]
-    db.delete(app_record); db.delete(job); db.commit()
-    client.post(f"/api/candidate/cvs/{cv1_id}/default", headers=h)
-    assert client.delete(f"/api/candidate/cvs/{cv1_id}", headers=h).status_code == 204
+    assert del_res.status_code == 204
+    # CV bị xóa mềm, danh sách ứng viên chỉ còn cv2 và cv2 được tự động gán mặc định
     list_res = client.get("/api/candidate/cvs", headers=h).json()
     assert len(list_res) == 1 and list_res[0]["id"] == cv2_id and list_res[0]["is_default"] is True

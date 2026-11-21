@@ -123,8 +123,8 @@ def apply_job(
     if job.deadline and job.deadline < datetime.now(timezone.utc).date():
         raise HTTPException(status_code=422, detail="Tin tuyển dụng đã hết hạn nộp hồ sơ.")
 
-    # Kiểm tra CV thuộc về ứng viên
-    cv = db.scalar(select(CV).where(CV.id == body.cv_id, CV.candidate_id == current_user.id))
+    # Kiểm tra CV thuộc về ứng viên và chưa bị xóa mềm
+    cv = db.scalar(select(CV).where(CV.id == body.cv_id, CV.candidate_id == current_user.id, CV.deleted_at.is_(None)))
     if not cv:
         raise HTTPException(status_code=422, detail="CV không hợp lệ.")
 
