@@ -82,16 +82,17 @@ def list_categories(response: Response, db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/skills", response_model=list[MetaSkillOut], summary="Gợi ý kỹ năng (tối đa 10)")
+@router.get("/skills", response_model=list[MetaSkillOut], summary="Danh sách & gợi ý kỹ năng kèm số việc làm thật")
 def search_skills(
     q: str = Query("", max_length=80),
+    limit: int = Query(16, ge=1, le=50),
     db: Session = Depends(get_db),
 ):
     stmt = select(MetaSkill)
     keyword = q.strip()
     if keyword:
         stmt = stmt.where(MetaSkill.name.ilike(f"%{keyword}%"))
-    stmt = stmt.order_by(MetaSkill.usage_count.desc(), MetaSkill.name.asc()).limit(10)
+    stmt = stmt.order_by(MetaSkill.usage_count.desc(), MetaSkill.name.asc()).limit(limit)
     rows = db.scalars(stmt).all()
     return [
         MetaSkillOut(id=s.id, name=s.name, usage_count=s.usage_count, job_count=s.usage_count)

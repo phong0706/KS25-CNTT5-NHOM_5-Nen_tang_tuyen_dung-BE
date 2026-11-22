@@ -104,6 +104,7 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
             Company.address.label("company_address"),
             Company.website.label("company_website"),
             Company.is_verified.label("company_is_verified"),
+            Company.is_visible.label("company_is_visible"),
             Company.verification_status.label("company_verification_status"),
             Company.status.label("company_status"),
             case((Company.logo_status.in_(["approved", "active"]), Company.logo_url), else_=None).label("company_logo"),
@@ -139,12 +140,15 @@ def get_public_job_detail_data(db: Session, job_id: int, user: User | None) -> d
             )
         ) is not None
 
+    can_manage_comp = bool(user and (user.id == job.employer_id or getattr(user, "role", "") in ("admin", "operator")))
+    comp_slug = row.company_slug if (row.company_is_visible or can_manage_comp) else None
+
     return {
         "id": job.id,
         "status": job.status,
         "title": (job.title or "").replace("[Seed] ", "").replace("[Seed]", ""),
         "company_id": job.company_id or job.employer_id,
-        "company_slug": row.company_slug,
+        "company_slug": comp_slug,
         "company_name": row.company_name or "Doanh nghiệp tuyển dụng",
         "company_logo": row.company_logo or None,
         "location": job.location,

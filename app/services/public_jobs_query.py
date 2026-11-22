@@ -2,6 +2,7 @@
 from datetime import date, datetime
 import json
 import math
+import re
 
 from sqlalchemy import String, and_, case, cast, func, or_, select, text
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.models.company import Company, CompanyStatus
 from app.models.job import Job, MetaCategory, MetaLevel, MetaLocation, MetaWorkType, SavedJob
 from app.models.user import User
 from app.schemas.job import FacetItemOut, PublicJobCardOut, PublicJobsFacetsOut, PublicJobsSearchOut
+from app.services.job_relevance_service import compute_relevance_score
 from app.services.matching import compute_job_match
 from app.services.salary_insight_service import fetch_peers_salaries_map, get_job_salary_insight
 
@@ -18,18 +20,33 @@ def _split_csv(val: str) -> list[str]:
     return [x.strip() for x in val.split(",") if x.strip()]
 
 
-def build_public_job_filters(*, q: str = "", location: str = "", level: str = "", work_type: str = "", category: str = "", company_id: int | None = None, company: str = "", salary_min: int | None = None, salary_max: int | None = None, skills: str = "", exclude: str = ""):
+def build_public_job_filters(db: Session | None = None, *, q: str = "", location: str = "", level: str = "", work_type: str = "", category: str = "", company_id: int | None = None, company: str = "", salary_min: int | None = None, salary_max: int | None = None, skills: str = "", exclude: str = ""):
     today = date.today()
     comp_ok = or_(Company.verification_status == "da_xac_minh", Company.status == CompanyStatus.VERIFIED, Company.is_verified == True)  # noqa: E712
     conds = [Job.status.in_(["open", "published"]), Job.deleted_at.is_(None), or_(Job.deadline.is_(None), Job.deadline >= today), comp_ok]
     kw = q.strip()
     if kw:
-        tokens = [t for t in kw.replace("-", " ").split() if len(t) >= 2]
-        if len(kw) >= 3 and tokens:
+        tokens = [re.sub(r"[^\w]", "", t) for t in kw.replace("-", " ").split()]
+        tokens = [t for t in tokens if len(t) >= 2]
+        kw_pattern = f"%{kw}%"
+        kw_lower = kw.lower()
+        skills_like = func.lower(cast(Job.skills, String(2000))).like(f"%{kw_lower}%")
+        q_or_clauses = [
+            Job.title.ilike(kw_pattern),
+            Company.name.ilike(kw_pattern),
+            Company.slug.ilike(kw_pattern),
+            skills_like,
+        ]
+        is_mysql = False
+        if db is not None:
+            try:
+                is_mysql = bool(db.bind and db.bind.dialect.name == "mysql")
+            except Exception:
+                pass
+        if is_mysql and len(kw) >= 3 and tokens:
             boolean_q = " ".join(f"+{t}*" for t in tokens[:5])
-            conds.append(or_(text("MATCH(jobs.title) AGAINST(:ft_q IN BOOLEAN MODE)").bindparams(ft_q=boolean_q), Job.title.ilike(f"%{kw}%")))
-        else:
-            conds.append(Job.title.ilike(f"%{kw}%"))
+            q_or_clauses.append(text("MATCH(jobs.title) AGAINST(:ft_q IN BOOLEAN MODE)").bindparams(ft_q=boolean_q))
+        conds.append(or_(*q_or_clauses))
 
     if exclude != "location" and location.strip():
         vals = _split_csv(location)
@@ -62,7 +79,7 @@ def build_public_job_filters(*, q: str = "", location: str = "", level: str = ""
 
 
 def count_public_jobs(db: Session, **kwargs) -> int:
-    conds = build_public_job_filters(**kwargs)
+    conds = build_public_job_filters(db, **kwargs)
     stmt = (
         select(func.count(func.distinct(Job.id)))
         .select_from(Job)
@@ -89,7 +106,7 @@ def _fetch_market_benchmarks(db: Session) -> dict:
 
 
 def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_key: str) -> list[FacetItemOut]:
-    conds = build_public_job_filters(**filter_kwargs, exclude=exclude_key)
+    conds = build_public_job_filters(db, **filter_kwargs, exclude=exclude_key)
     subq = (
         select(fk_col.label("meta_id"), func.count(func.distinct(Job.id)).label("cnt"))
         .select_from(Job).outerjoin(Company, Job.company_id == Company.id)
@@ -103,6 +120,19 @@ def _compute_facet(db: Session, model_cls, fk_col, filter_kwargs: dict, exclude_
         .order_by(text("cnt DESC"), model_cls.sort_order.asc(), model_cls.id.asc())
     )
     return [FacetItemOut(value=r.slug, label=r.name, count=int(r.cnt)) for r in db.execute(stmt).all()]
+
+
+def _compute_company_facet(db: Session, filter_kwargs: dict) -> list[FacetItemOut]:
+    conds = build_public_job_filters(db, **filter_kwargs, exclude="company")
+    stmt = (
+        select(Company.slug, Company.name, func.count(func.distinct(Job.id)).label("cnt"))
+        .select_from(Job).join(Company, Job.company_id == Company.id)
+        .outerjoin(MetaLocation, Job.location_id == MetaLocation.id).outerjoin(MetaLevel, Job.level_id == MetaLevel.id)
+        .outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id).outerjoin(MetaCategory, Job.category_id == MetaCategory.id)
+        .where(*conds).group_by(Company.slug, Company.name)
+        .order_by(text("cnt DESC"), Company.name.asc())
+    )
+    return [FacetItemOut(value=r.slug, label=r.name, count=int(r.cnt)) for r in db.execute(stmt).all() if r.slug]
 
 
 def _load_candidate_profile(db: Session, current_user: User | None) -> dict | None:
@@ -131,7 +161,7 @@ def _load_candidate_profile(db: Session, current_user: User | None) -> dict | No
 
 def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_type: str, category: str, company_id: int | None, company: str, salary_min: int | None, salary_max: int | None, skills: str, sort: str, distinct_company: bool, page: int, page_size: int, current_user: User | None) -> PublicJobsSearchOut:
     f_kwargs = dict(q=q, location=location, level=level, work_type=work_type, category=category, company_id=company_id, company=company, salary_min=salary_min, salary_max=salary_max, skills=skills)
-    conds = build_public_job_filters(**f_kwargs)
+    conds = build_public_job_filters(db, **f_kwargs)
     count_target = func.distinct(Job.company_id) if distinct_company else func.distinct(Job.id)
     total = int(db.scalar(
         select(func.count(count_target)).select_from(Job).outerjoin(Company, Job.company_id == Company.id)
@@ -145,6 +175,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
             level=_compute_facet(db, MetaLevel, Job.level_id, f_kwargs, "level"),
             type=_compute_facet(db, MetaWorkType, Job.work_type_id, f_kwargs, "type"),
             category=_compute_facet(db, MetaCategory, Job.category_id, f_kwargs, "category"),
+            company=_compute_company_facet(db, f_kwargs),
         )
         return PublicJobsSearchOut(items=[], total=total, page=page, page_size=page_size, total_pages=total_pages, facets=facets)
 
@@ -152,7 +183,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
     offset = (safe_page - 1) * page_size
 
     cand_profile_data = _load_candidate_profile(db, current_user)
-    use_relevant_sort = sort == "relevant" and cand_profile_data is not None
+    use_relevant_sort = sort == "relevant"
 
     if sort == "salary_desc":
         is_neg_expr = case((or_(Job.is_salary_negotiable == True, and_(Job.salary_min.is_(None), Job.salary_max.is_(None))), 1), else_=0)  # noqa: E712
@@ -160,8 +191,11 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
     else:
         order_clauses = [func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
 
+    logo_expr = case((Company.logo_status.in_(["approved", "active"]), func.coalesce(Company.logo_url, Company.logo)), else_=None).label("company_logo")
+    logo_2x_expr = case((Company.logo_status.in_(["approved", "active"]), Company.logo_url_2x), else_=None).label("company_logo_2x")
+
     stmt = (
-        select(Job, Company.name.label("company_name"), Company.slug.label("company_slug"), MetaLocation.slug.label("loc_slug"), MetaLevel.slug.label("lvl_slug"), MetaWorkType.slug.label("wt_slug"), MetaCategory.name.label("cat_name"), MetaCategory.slug.label("cat_slug"))
+        select(Job, Company.name.label("company_name"), Company.slug.label("company_slug"), logo_expr, logo_2x_expr, MetaLocation.slug.label("loc_slug"), MetaLevel.slug.label("lvl_slug"), MetaWorkType.slug.label("wt_slug"), MetaCategory.name.label("cat_name"), MetaCategory.slug.label("cat_slug"))
         .outerjoin(Company, Job.company_id == Company.id).outerjoin(MetaLocation, Job.location_id == MetaLocation.id)
         .outerjoin(MetaLevel, Job.level_id == MetaLevel.id).outerjoin(MetaWorkType, Job.work_type_id == MetaWorkType.id)
         .outerjoin(MetaCategory, Job.category_id == MetaCategory.id).where(*conds).order_by(*order_clauses)
@@ -190,11 +224,51 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
 
     if use_relevant_sort:
         all_rows = db.execute(stmt).all()
-        match_cache = {
-            r.Job.id: compute_job_match(cand_profile_data, {"skills": r.Job.skills if isinstance(r.Job.skills, list) else [], "level": r.Job.level, "location": r.Job.location, "work_type": r.Job.work_type, "salary_min": r.Job.salary_min, "salary_max": r.Job.salary_max, "is_salary_negotiable": bool(r.Job.is_salary_negotiable)})
-            for r in all_rows
-        }
-        all_rows.sort(key=lambda r: (match_cache[r.Job.id]["match_score"], (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None), r.Job.id), reverse=True)
+        match_cache = {}
+        rel_scores = {}
+        for r in all_rows:
+            job = r.Job
+            m_res = None
+            if cand_profile_data:
+                m_res = compute_job_match(
+                    cand_profile_data,
+                    {
+                        "skills": job.skills if isinstance(job.skills, list) else [],
+                        "level": job.level,
+                        "location": job.location,
+                        "work_type": job.work_type,
+                        "salary_min": job.salary_min,
+                        "salary_max": job.salary_max,
+                        "is_salary_negotiable": bool(job.is_salary_negotiable),
+                    },
+                )
+                match_cache[job.id] = m_res
+            job_dict = {
+                "id": job.id,
+                "title": job.title,
+                "skills": job.skills if isinstance(job.skills, list) else [],
+                "company_name": r.company_name,
+                "salary_min": job.salary_min,
+                "salary_max": job.salary_max,
+                "is_salary_negotiable": job.is_salary_negotiable,
+                "is_verified": bool(r.company_name and r.company_logo),
+                "created_at": job.created_at,
+            }
+            rel_scores[job.id] = compute_relevance_score(
+                job_dict,
+                keyword=q,
+                candidate_profile=cand_profile_data,
+                match_score=m_res["match_score"] if m_res else None,
+            )
+        all_rows.sort(
+            key=lambda r: (
+                rel_scores.get(r.Job.id, 0.0),
+                r.Job.salary_max or r.Job.salary_min or 0,
+                (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None),
+                r.Job.id,
+            ),
+            reverse=True,
+        )
         rows = all_rows[offset : offset + page_size]
     else:
         match_cache = {}
@@ -211,6 +285,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         sal_insight, _ = get_job_salary_insight(job, peers_salaries_map)
         items.append(PublicJobCardOut(
             id=job.id, title=(job.title or "").replace("[Seed]", "").strip(), company_id=job.company_id, company_slug=r.company_slug, company_name=r.company_name or "Doanh nghiệp công nghệ",
+            company_logo=r.company_logo, company_logo_2x=r.company_logo_2x,
             location=job.location, location_slug=r.loc_slug, level=job.level, level_slug=r.lvl_slug, work_type=job.work_type, work_type_slug=r.wt_slug,
             category=r.cat_name, category_slug=r.cat_slug, salary_min=job.salary_min, salary_max=job.salary_max, is_salary_negotiable=job.is_salary_negotiable,
             skills=list(job.skills or []), published_at=job.published_at, created_at=job.created_at, is_saved=job.id in saved_ids,
@@ -222,5 +297,6 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
         level=_compute_facet(db, MetaLevel, Job.level_id, f_kwargs, "level"),
         type=_compute_facet(db, MetaWorkType, Job.work_type_id, f_kwargs, "type"),
         category=_compute_facet(db, MetaCategory, Job.category_id, f_kwargs, "category"),
+        company=_compute_company_facet(db, f_kwargs),
     )
     return PublicJobsSearchOut(items=items, total=total, page=safe_page, page_size=page_size, total_pages=total_pages, facets=facets)

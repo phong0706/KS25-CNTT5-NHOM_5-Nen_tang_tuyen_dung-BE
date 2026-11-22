@@ -29,16 +29,31 @@ CV_STORAGE_DIR = os.path.join(BASE_DIR, getattr(settings, "CV_UPLOAD_DIR", "stor
 LEGACY_UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "cvs")
 
 
+def should_delete_physical_file(used_in_apps_count: int, other_cv_references_count: int = 0) -> bool:
+    """Quyết định có xóa file vật lý trên đĩa không (chỉ xóa khi 0 đơn và 0 CV khác trỏ tới)."""
+    return used_in_apps_count == 0 and other_cv_references_count == 0
+
+
+def pick_new_default_cv(remaining_active_cvs: list):
+    """Chọn CV mặc định mới từ danh sách còn lại (chưa xóa mềm), ưu tiên bản ghi mới nhất."""
+    if not remaining_active_cvs:
+        return None
+    from datetime import datetime, timezone
+    min_date = datetime.min.replace(tzinfo=timezone.utc)
+    return sorted(remaining_active_cvs, key=lambda c: getattr(c, "created_at", None) or min_date, reverse=True)[0]
+
+
 def ensure_storage_dirs() -> None:
     os.makedirs(CV_STORAGE_DIR, exist_ok=True)
 
 
 def get_cv_file_path(stored_name: str) -> str:
     """Trả về đường dẫn tuyệt đối của file CV. Ưu tiên storage/cvs, fallback uploads/cvs."""
-    p = os.path.join(CV_STORAGE_DIR, stored_name)
+    clean = os.path.basename(stored_name or "")
+    p = os.path.join(CV_STORAGE_DIR, clean)
     if os.path.isfile(p):
         return p
-    legacy_p = os.path.join(LEGACY_UPLOAD_DIR, stored_name)
+    legacy_p = os.path.join(LEGACY_UPLOAD_DIR, clean)
     if os.path.isfile(legacy_p):
         return legacy_p
     return p
@@ -60,6 +75,8 @@ def validate_cv_content(content: bytes) -> tuple[str, str]:
     """Kiểm tra magic bytes thật của file (PDF, DOC, DOCX) và chống zip bomb."""
     if not content or len(content) == 0:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File rỗng (0 byte).")
+    if len(content) < 1024:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Dung lượng file quá nhỏ (tối thiểu 1 KB).")
     if len(content) > MAX_CV_SIZE:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Dung lượng file vượt quá 5 MB.")
 

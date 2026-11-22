@@ -32,6 +32,7 @@ class CV(Base):
     __tablename__ = "cvs"
     __table_args__ = (
         Index("idx_cvs_candidate_id", "candidate_id"),
+        Index("idx_cvs_candidate_deleted", "candidate_id", "deleted_at"),
         {"extend_existing": True},
     )
 
@@ -45,6 +46,7 @@ class CV(Base):
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_default: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     @property
     def file_size(self) -> int:

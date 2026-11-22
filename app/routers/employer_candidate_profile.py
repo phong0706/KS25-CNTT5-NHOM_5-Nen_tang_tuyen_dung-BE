@@ -20,6 +20,7 @@ from app.models.company import Company
 from app.models.job import Job
 from app.models.profile_view import ProfileView
 from app.models.user import User
+from app.services.cv_service import get_cv_file_path
 from app.services.matching import compute_job_match
 from app.services.profile_access import (
     build_candidate_profile_payload,
@@ -30,7 +31,6 @@ from app.services.profile_access import (
 
 router = APIRouter(tags=["Employer Candidate Profile"])
 
-CV_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "cvs"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
@@ -116,10 +116,13 @@ def get_employer_candidate_profile(
     match_data = None
     if job_id and job_obj:
         m = compute_job_match(
-            {"skills": raw_skills, "headline": profile.headline, "location": profile.location, "work_type": profile.work_type, "expected_salary": profile.expected_salary or profile.desired_salary},
-            {"skills": [s.skill_name for s in (getattr(job_obj, "skills", None) or [])], "level": job_obj.level, "location": job_obj.location, "work_type": job_obj.work_type, "salary_min": job_obj.salary_min, "salary_max": job_obj.salary_max, "is_salary_negotiable": job_obj.is_salary_negotiable},
+            {"skills": raw_skills, "level": profile.level, "headline": profile.headline, "location": profile.location or profile.address, "work_type": profile.work_type, "expected_salary": profile.expected_salary or profile.desired_salary},
+            {"skills": [s if isinstance(s, str) else getattr(s, "skill_name", str(s)) for s in (getattr(job_obj, "skills", None) or [])], "level": job_obj.level, "location": job_obj.location, "work_type": job_obj.work_type, "salary_min": job_obj.salary_min, "salary_max": job_obj.salary_max, "is_salary_negotiable": job_obj.is_salary_negotiable},
         )
-        match_data = {"score": m["match_score"], "matched_skills": m["matched_skills"], "missing_skills": m["missing_skills"]}
+        match_data = {
+            "score": m["match_score"], "matched_skills": m["matched_skills"], "missing_skills": m["missing_skills"],
+            "skills_score": m["skills_score"], "level_score": m["level_score"], "location_score": m["location_score"], "salary_score": m["salary_score"], "reason": m["reason"],
+        }
 
     payload = build_candidate_profile_payload(profile, cand_user, access, raw_skills, exps, edus, apps_to_you, match_data)
     return JSONResponse(content=payload, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
@@ -163,15 +166,15 @@ def get_employer_candidate_cv(
     if not cv or not cv.stored_name:
         raise HTTPException(status_code=404, detail="Không tìm thấy thông tin file CV trong hệ thống.")
 
-    fp = CV_DIR / cv.stored_name
+    fp = Path(get_cv_file_path(cv.stored_name))
     if not fp.is_file():
         raise HTTPException(status_code=404, detail="File CV không tồn tại trên hệ thống lưu trữ.")
 
     fn = app_row.cv_name_snapshot or cv.original_name or "CV.pdf"
     mime = "application/pdf" if fp.suffix.lower() == ".pdf" else (cv.mime_type or "application/octet-stream")
     return FileResponse(
-        path=str(fp), media_type=mime, filename=fn,
-        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": f'inline; filename="{fn}"'},
+        path=str(fp), media_type=mime, filename=fn, content_disposition_type="inline",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
 
 
