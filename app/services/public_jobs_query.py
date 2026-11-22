@@ -11,6 +11,7 @@ from app.models.company import Company, CompanyStatus
 from app.models.job import Job, MetaCategory, MetaLevel, MetaLocation, MetaWorkType, SavedJob
 from app.models.user import User
 from app.schemas.job import FacetItemOut, PublicJobCardOut, PublicJobsFacetsOut, PublicJobsSearchOut
+from app.services.job_relevance_service import compute_relevance_score
 from app.services.matching import compute_job_match
 from app.services.salary_insight_service import fetch_peers_salaries_map, get_job_salary_insight
 
@@ -182,7 +183,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
     offset = (safe_page - 1) * page_size
 
     cand_profile_data = _load_candidate_profile(db, current_user)
-    use_relevant_sort = sort == "relevant" and cand_profile_data is not None
+    use_relevant_sort = sort == "relevant"
 
     if sort == "salary_desc":
         is_neg_expr = case((or_(Job.is_salary_negotiable == True, and_(Job.salary_min.is_(None), Job.salary_max.is_(None))), 1), else_=0)  # noqa: E712
@@ -223,11 +224,51 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
 
     if use_relevant_sort:
         all_rows = db.execute(stmt).all()
-        match_cache = {
-            r.Job.id: compute_job_match(cand_profile_data, {"skills": r.Job.skills if isinstance(r.Job.skills, list) else [], "level": r.Job.level, "location": r.Job.location, "work_type": r.Job.work_type, "salary_min": r.Job.salary_min, "salary_max": r.Job.salary_max, "is_salary_negotiable": bool(r.Job.is_salary_negotiable)})
-            for r in all_rows
-        }
-        all_rows.sort(key=lambda r: (match_cache[r.Job.id]["match_score"], (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None), r.Job.id), reverse=True)
+        match_cache = {}
+        rel_scores = {}
+        for r in all_rows:
+            job = r.Job
+            m_res = None
+            if cand_profile_data:
+                m_res = compute_job_match(
+                    cand_profile_data,
+                    {
+                        "skills": job.skills if isinstance(job.skills, list) else [],
+                        "level": job.level,
+                        "location": job.location,
+                        "work_type": job.work_type,
+                        "salary_min": job.salary_min,
+                        "salary_max": job.salary_max,
+                        "is_salary_negotiable": bool(job.is_salary_negotiable),
+                    },
+                )
+                match_cache[job.id] = m_res
+            job_dict = {
+                "id": job.id,
+                "title": job.title,
+                "skills": job.skills if isinstance(job.skills, list) else [],
+                "company_name": r.company_name,
+                "salary_min": job.salary_min,
+                "salary_max": job.salary_max,
+                "is_salary_negotiable": job.is_salary_negotiable,
+                "is_verified": bool(r.company_name and r.company_logo),
+                "created_at": job.created_at,
+            }
+            rel_scores[job.id] = compute_relevance_score(
+                job_dict,
+                keyword=q,
+                candidate_profile=cand_profile_data,
+                match_score=m_res["match_score"] if m_res else None,
+            )
+        all_rows.sort(
+            key=lambda r: (
+                rel_scores.get(r.Job.id, 0.0),
+                r.Job.salary_max or r.Job.salary_min or 0,
+                (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None),
+                r.Job.id,
+            ),
+            reverse=True,
+        )
         rows = all_rows[offset : offset + page_size]
     else:
         match_cache = {}
