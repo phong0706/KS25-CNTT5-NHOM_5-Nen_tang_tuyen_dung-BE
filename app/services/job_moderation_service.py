@@ -14,6 +14,7 @@ from app.services.job_moderation_rules import (
     validate_optimistic_version,
     validate_rejection_reason,
 )
+from app.services.skill_sync_service import recalculate_all_skill_counts
 
 
 def _send_moderation_notification(db: Session, uid: int, title: str, msg: str, ref_id: int) -> None:
@@ -59,6 +60,7 @@ def submit_job_for_review_service(db: Session, job_id: int, employer_id: int, ex
     _send_moderation_notification(db, employer_id, "Tin tuyển dụng đã gửi duyệt", f"Tin tuyển dụng '{job.title}' đã được gửi duyệt thành công.", job.id)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job
 
 
@@ -80,6 +82,7 @@ def withdraw_job_to_draft_service(db: Session, job_id: int, employer_id: int, ex
     db.add(JobStatusHistory(job_id=job.id, from_status=old_st, to_status="draft", changed_by=employer_id))
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job
 
 
@@ -101,6 +104,7 @@ def approve_job_service(db: Session, job_id: int, admin_id: int, expected_versio
     _send_moderation_notification(db, job.employer_id, "Tin tuyển dụng đã được phê duyệt", f"Tin tuyển dụng '{job.title}' của bạn đã được duyệt và hiển thị công khai.", job.id)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job
 
 
@@ -123,6 +127,7 @@ def reject_job_service(db: Session, job_id: int, admin_id: int, expected_version
     _send_moderation_notification(db, job.employer_id, "Tin tuyển dụng bị từ chối", f"Tin tuyển dụng '{job.title}' bị từ chối. Lý do: {clean_reason}", job.id)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job
 
 
@@ -146,6 +151,7 @@ def admin_delete_job_service(db: Session, job_id: int, admin_id: int, reason: st
     _send_moderation_notification(db, job.employer_id, "Tin tuyển dụng đã bị xóa", msg, job.id)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job
 
 
@@ -159,4 +165,5 @@ def employer_delete_job_service(db: Session, job_id: int, employer_id: int) -> J
     job.version += 1
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return job

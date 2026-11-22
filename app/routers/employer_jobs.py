@@ -31,6 +31,7 @@ from app.services.notification import (
     notify_company_followers_about_job,
     notify_job_status_changed,
 )
+from app.services.skill_sync_service import recalculate_all_skill_counts, sync_skills_from_job
 
 router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
 
@@ -317,6 +318,7 @@ def patch_job_status(
 
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     st_label, st_tone = STATUS_META.get(job.status, (job.status, "neutral"))
     return JobActionResultOut(
         id=job.id,
@@ -477,8 +479,10 @@ def create_employer_job(
         status=body.status if company_verified else "draft",
     )
     db.add(job)
+    sync_skills_from_job(db, clean_skills)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return _to_job_detail(db, job)
 
 
@@ -527,8 +531,10 @@ def update_employer_job(
     elif job.status == "draft" and body.status in ("draft", "pending"):
         job.status = body.status
 
+    sync_skills_from_job(db, clean_skills)
     db.commit()
     db.refresh(job)
+    recalculate_all_skill_counts(db)
     return _to_job_detail(db, job)
 
 
