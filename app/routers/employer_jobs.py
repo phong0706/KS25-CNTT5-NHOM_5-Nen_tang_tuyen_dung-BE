@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.security import role_required
 from app.db.session import get_db
 from app.models.company import Company, CompanyStatus
-from app.models.job import Job, JobApplication
+from app.models.application import Application
+from app.models.job import Job
 from app.models.user import User
 from app.schemas.job import (
     AllowedActionOut,
@@ -130,14 +131,14 @@ def list_employer_jobs(
     # 2. Subquery đếm hồ sơ & hồ sơ mới theo job_id bằng GROUP BY / COUNT
     app_stats_subq = (
         select(
-            JobApplication.job_id.label("job_id"),
-            func.count(JobApplication.id).label("applicants_count"),
+            Application.job_id.label("job_id"),
+            func.count(Application.id).label("applicants_count"),
             func.coalesce(
-                func.sum(case((JobApplication.is_viewed == False, 1), else_=0)),  # noqa: E712
+                func.sum(case((Application.viewed_at.is_(None), 1), else_=0)),
                 0,
             ).label("new_applicants_count"),
         )
-        .group_by(JobApplication.job_id)
+        .group_by(Application.job_id)
         .subquery()
     )
 
@@ -187,6 +188,28 @@ def list_employer_jobs(
     )
 
     rows = db.execute(stmt).all()
+    job_ids = [job.id for job, _, _ in rows]
+    application_statuses = {
+        job_id: {
+            "SUBMITTED": 0,
+            "REVIEWING": 0,
+            "INTERVIEW": 0,
+            "OFFERED": 0,
+            "REJECTED": 0,
+            "WITHDRAWN": 0,
+        }
+        for job_id in job_ids
+    }
+    if job_ids:
+        status_rows = db.execute(
+            select(Application.job_id, func.upper(Application.status), func.count(Application.id))
+            .where(Application.job_id.in_(job_ids))
+            .group_by(Application.job_id, func.upper(Application.status))
+        ).all()
+        for job_id, application_status, count in status_rows:
+            if application_status in application_statuses[job_id]:
+                application_statuses[job_id][application_status] = int(count)
+
     items: list[JobListItemOut] = []
     for job, app_cnt, new_cnt in rows:
         st_label, st_tone = STATUS_META.get(job.status, (job.status, "neutral"))
@@ -204,6 +227,7 @@ def list_employer_jobs(
                 status_tone=st_tone,
                 applicants_count=int(app_cnt or 0),
                 new_applicants_count=int(new_cnt or 0),
+                application_counts=application_statuses[job.id],
                 views_count=job.views_count,
                 published_at=job.published_at,
                 created_at=job.created_at,

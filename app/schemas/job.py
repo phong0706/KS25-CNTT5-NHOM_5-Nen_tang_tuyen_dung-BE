@@ -73,6 +73,7 @@ class JobListItemOut(BaseModel):
     status_tone: str
     applicants_count: int = 0
     new_applicants_count: int = 0
+    application_counts: dict[str, int] = Field(default_factory=dict)
     views_count: int = 0
     published_at: datetime | None = None
     created_at: datetime
