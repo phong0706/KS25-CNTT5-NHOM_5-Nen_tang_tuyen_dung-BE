@@ -17,11 +17,19 @@ from app.services.public_jobs_query import count_public_jobs, query_public_jobs
 def test_search_suggest_company_count_matches_jobs_api():
     db = SessionLocal()
     try:
+        from app.models.user import User
+        user = db.query(User).filter(User.role == "employer").first()
+        if not user:
+            user = User(email="test_emp_suggest@test.com", password="123", role="employer", full_name="Emp Suggest")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
         # Chuẩn bị dữ liệu mẫu cho test
         comp = db.query(Company).filter(Company.slug == "khoi-nghiep-test").first()
         if not comp:
             comp = Company(
-                employer_id=1,
+                employer_id=user.id,
                 name="Khởi nghiệp Sáng tạo Xanh",
                 slug="khoi-nghiep-test",
                 status="verified",
@@ -36,7 +44,7 @@ def test_search_suggest_company_count_matches_jobs_api():
         job = db.query(Job).filter(Job.company_id == comp.id).first()
         if not job:
             job = Job(
-                employer_id=1,
+                employer_id=user.id,
                 company_id=comp.id,
                 title="Lập trình viên Khởi nghiệp",
                 status="published",
