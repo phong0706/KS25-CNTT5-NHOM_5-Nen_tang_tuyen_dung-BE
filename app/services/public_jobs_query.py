@@ -1,5 +1,5 @@
 """Dịch vụ truy vấn, lọc facets và sắp xếp việc làm công khai."""
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import json
 import math
 
@@ -150,15 +150,20 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
 
     safe_page = page
     offset = (safe_page - 1) * page_size
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    featured_priority = case(
+        (and_(Job.is_featured.is_(True), Job.featured_until > now), 1),
+        else_=0,
+    )
 
     cand_profile_data = _load_candidate_profile(db, current_user)
     use_relevant_sort = sort == "relevant" and cand_profile_data is not None
 
     if sort == "salary_desc":
         is_neg_expr = case((or_(Job.is_salary_negotiable == True, and_(Job.salary_min.is_(None), Job.salary_max.is_(None))), 1), else_=0)  # noqa: E712
-        order_clauses = [is_neg_expr.asc(), func.coalesce(Job.salary_max, Job.salary_min, 0).desc(), func.coalesce(Job.salary_min, Job.salary_max, 0).desc(), func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
+        order_clauses = [featured_priority.desc(), is_neg_expr.asc(), func.coalesce(Job.salary_max, Job.salary_min, 0).desc(), func.coalesce(Job.salary_min, Job.salary_max, 0).desc(), func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
     else:
-        order_clauses = [func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
+        order_clauses = [featured_priority.desc(), func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()]
 
     stmt = (
         select(Job, Company.name.label("company_name"), Company.slug.label("company_slug"), MetaLocation.slug.label("loc_slug"), MetaLevel.slug.label("lvl_slug"), MetaWorkType.slug.label("wt_slug"), MetaCategory.name.label("cat_name"), MetaCategory.slug.label("cat_slug"))
@@ -173,7 +178,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
                 func.row_number()
                 .over(
                     partition_by=Job.company_id,
-                    order_by=[func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()],
+                    order_by=[featured_priority.desc(), func.coalesce(Job.published_at, Job.created_at).desc(), Job.id.desc()],
                 )
                 .label("rn"),
             )
@@ -194,7 +199,7 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
             r.Job.id: compute_job_match(cand_profile_data, {"skills": r.Job.skills if isinstance(r.Job.skills, list) else [], "level": r.Job.level, "location": r.Job.location, "work_type": r.Job.work_type, "salary_min": r.Job.salary_min, "salary_max": r.Job.salary_max, "is_salary_negotiable": bool(r.Job.is_salary_negotiable)})
             for r in all_rows
         }
-        all_rows.sort(key=lambda r: (match_cache[r.Job.id]["match_score"], (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None), r.Job.id), reverse=True)
+        all_rows.sort(key=lambda r: (bool(r.Job.is_featured and r.Job.featured_until and r.Job.featured_until > now), match_cache[r.Job.id]["match_score"], (r.Job.published_at or r.Job.created_at or datetime.min).replace(tzinfo=None), r.Job.id), reverse=True)
         rows = all_rows[offset : offset + page_size]
     else:
         match_cache = {}
@@ -214,6 +219,12 @@ def query_public_jobs(db: Session, *, q: str, location: str, level: str, work_ty
             location=job.location, location_slug=r.loc_slug, level=job.level, level_slug=r.lvl_slug, work_type=job.work_type, work_type_slug=r.wt_slug,
             category=r.cat_name, category_slug=r.cat_slug, salary_min=job.salary_min, salary_max=job.salary_max, is_salary_negotiable=job.is_salary_negotiable,
             skills=list(job.skills or []), published_at=job.published_at, created_at=job.created_at, is_saved=job.id in saved_ids,
+            is_featured=bool(job.is_featured and job.featured_until and job.featured_until > now),
+            featured_until=(
+                job.featured_until.replace(tzinfo=timezone.utc)
+                if job.featured_until and job.featured_until.tzinfo is None
+                else job.featured_until
+            ),
             match_score=m_res["match_score"] if m_res else None, matched_skills=m_res["matched_skills"] if m_res else [],
             missing_skills=m_res["missing_skills"] if m_res else [], match_reason=m_res["reason"] if m_res else None, salary_insight=sal_insight,
         ))

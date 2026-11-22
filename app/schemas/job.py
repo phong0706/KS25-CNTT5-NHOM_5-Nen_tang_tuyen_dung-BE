@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.saved_job import SavedJobDetailOut
 
@@ -75,6 +75,8 @@ class JobListItemOut(BaseModel):
     new_applicants_count: int = 0
     application_counts: dict[str, int] = Field(default_factory=dict)
     views_count: int = 0
+    is_featured: bool = False
+    featured_until: datetime | None = None
     published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
@@ -91,6 +93,23 @@ class EmployerJobsListOut(BaseModel):
 
 class JobStatusPatchIn(BaseModel):
     action: str = Field(..., min_length=1, max_length=32)
+
+
+class JobFeaturedUpdateIn(BaseModel):
+    is_featured: bool
+    duration_days: int | None = Field(default=None, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def require_duration_when_enabled(self):
+        if self.is_featured and self.duration_days is None:
+            raise ValueError("Cần chọn thời hạn khi bật tin nổi bật")
+        return self
+
+
+class JobFeaturedOut(BaseModel):
+    id: int
+    is_featured: bool
+    featured_until: datetime | None = None
 
 
 class JobActionResultOut(BaseModel):
@@ -150,6 +169,8 @@ class JobDetailOut(BaseModel):
     status_label: str
     status_tone: str
     views_count: int = 0
+    is_featured: bool = False
+    featured_until: datetime | None = None
     company_name: str | None = None
     published_at: datetime | None = None
     created_at: datetime
@@ -191,6 +212,8 @@ class PublicJobCardOut(BaseModel):
     published_at: datetime | None = None
     created_at: datetime
     is_saved: bool = False
+    is_featured: bool = False
+    featured_until: datetime | None = None
     is_expired: bool = False
     deadline: date | None = None
     match_score: int | None = None
@@ -434,6 +457,8 @@ __all__ = [
     "JobListItemOut",
     "EmployerJobsListOut",
     "JobStatusPatchIn",
+    "JobFeaturedUpdateIn",
+    "JobFeaturedOut",
     "JobActionResultOut",
     "JobDuplicateOut",
     "JobDeleteOut",

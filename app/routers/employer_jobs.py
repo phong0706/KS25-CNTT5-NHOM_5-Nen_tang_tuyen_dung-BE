@@ -1,5 +1,5 @@
 """Router quản lý tin tuyển dụng của nhà tuyển dụng."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
@@ -21,6 +21,8 @@ from app.schemas.job import (
     JobDeleteOut,
     JobDetailOut,
     JobDuplicateOut,
+    JobFeaturedOut,
+    JobFeaturedUpdateIn,
     JobListItemOut,
     JobPaginationOut,
     JobPayloadIn,
@@ -36,6 +38,12 @@ from app.services.notification import (
 router = APIRouter(prefix="/employer/jobs", tags=["Employer Jobs"])
 
 PAGE_SIZE = 10
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 STATUS_META: dict[str, tuple[str, str]] = {
     "draft": ("Bản nháp", "neutral"),
@@ -229,6 +237,11 @@ def list_employer_jobs(
                 new_applicants_count=int(new_cnt or 0),
                 application_counts=application_statuses[job.id],
                 views_count=job.views_count,
+                is_featured=job.is_featured and bool(
+                    job.featured_until
+                    and job.featured_until > datetime.now(timezone.utc).replace(tzinfo=None)
+                ),
+                featured_until=_as_utc(job.featured_until),
                 published_at=job.published_at,
                 created_at=job.created_at,
                 updated_at=job.updated_at,
@@ -247,6 +260,44 @@ def list_employer_jobs(
             total_pages=total_pages,
         ),
         server_time=datetime.now(timezone.utc),
+    )
+
+
+@router.patch("/{job_id}/featured", response_model=JobFeaturedOut, summary="Bật hoặc tắt tin nổi bật")
+def update_job_featured(
+    job_id: int,
+    body: JobFeaturedUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(role_required("recruiter", "employer")),
+):
+    job = _get_owned_job(db, job_id, current_user.id)
+    if body.is_featured:
+        if job.status not in {"published", "open"}:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="Chỉ tin đang tuyển mới có thể được làm nổi bật.",
+            )
+        if job.deadline and job.deadline < date.today():
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="Tin đã hết hạn, không thể làm nổi bật.",
+            )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        feature_end = now + timedelta(days=body.duration_days or 7)
+        if job.deadline:
+            deadline_end = datetime.combine(job.deadline, time.max)
+            feature_end = min(feature_end, deadline_end)
+        job.is_featured = feature_end > now
+        job.featured_until = feature_end if job.is_featured else None
+    else:
+        job.is_featured = False
+        job.featured_until = None
+    db.commit()
+    db.refresh(job)
+    return JobFeaturedOut(
+        id=job.id,
+        is_featured=job.is_featured,
+        featured_until=_as_utc(job.featured_until),
     )
 
 
@@ -441,6 +492,11 @@ def _to_job_detail(db: Session, job: Job) -> JobDetailOut:
         status_label=st_label,
         status_tone=st_tone,
         views_count=job.views_count,
+        is_featured=job.is_featured and bool(
+            job.featured_until
+            and job.featured_until > datetime.now(timezone.utc).replace(tzinfo=None)
+        ),
+        featured_until=_as_utc(job.featured_until),
         company_name=company.name if company else None,
         published_at=job.published_at,
         created_at=job.created_at,

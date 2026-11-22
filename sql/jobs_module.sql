@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   deadline         DATETIME      NOT NULL,
   status           ENUM('DRAFT','PENDING','OPEN','HIDDEN','CLOSED','REJECTED') NOT NULL DEFAULT 'OPEN',
   views_count      INT           NOT NULL DEFAULT 0,
+  is_featured      BOOLEAN       NOT NULL DEFAULT FALSE,
+  featured_until   DATETIME      NULL,
   created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_jobs_company   FOREIGN KEY (company_id)  REFERENCES companies(id) ON DELETE CASCADE,
@@ -84,7 +86,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   INDEX idx_jobs_experience_level (experience_level),
   INDEX idx_jobs_salary           (salary_min, salary_max),
   INDEX idx_jobs_created_at       (created_at),
-  INDEX idx_jobs_title            (title)
+  INDEX idx_jobs_title            (title),
+  INDEX idx_jobs_featured_until   (is_featured, featured_until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================

@@ -78,6 +78,7 @@ class Job(Base):
         Index("idx_jobs_category_id", "category_id"),
         Index("idx_jobs_created_at", "created_at"),
         Index("idx_jobs_employer_status_created", "employer_id", "status", "created_at"),
+        Index("idx_jobs_featured_until", "is_featured", "featured_until"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -120,6 +121,8 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     views_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    featured_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
