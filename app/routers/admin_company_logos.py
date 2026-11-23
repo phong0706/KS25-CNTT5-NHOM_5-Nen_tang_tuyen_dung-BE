@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from app.core.security import role_required
 from app.db.session import get_db
 from app.models.company import Company
+from app.models.company_logo import CompanyLogo
 from app.models.user import User
+from app.services.company_logo_service import clear_home_companies_cache
 from app.services.notification import NotificationType, create_notification
 
 router = APIRouter(prefix="/admin/company-logos", tags=["Admin Company Logos"])
@@ -100,6 +102,8 @@ def approve_company_logo(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy công ty.")
     old_status = comp.logo_status
     comp.logo_status = "approved"
+    db.query(CompanyLogo).filter_by(company_id=comp.id, status="cho_duyet").update({"status": "dang_dung", "is_current": True})
+    clear_home_companies_cache()
 
     # Gọi lại duyệt khi đã approved: không tạo thông báo mới
     if old_status not in ("approved", "active"):
@@ -130,6 +134,8 @@ def reject_company_logo(
     if not comp:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy công ty.")
     comp.logo_status = "rejected"
+    db.query(CompanyLogo).filter_by(company_id=comp.id, status="cho_duyet").update({"status": "tu_choi"})
+    clear_home_companies_cache()
 
     create_notification(
         db,
