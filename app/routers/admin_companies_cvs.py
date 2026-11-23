@@ -59,6 +59,22 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
     uploader_name = (u.full_name if u else f"User #{comp.logo_uploaded_by}") if comp.logo_uploaded_by else None
     owner = db.get(User, comp.employer_id) if comp.employer_id else None
     logo_state = get_company_logo_state(db, comp, request)
+    raw_logo_rel = comp.logo_url or comp.logo
+    full_url = logo_state["logo_full_url"] or _full_logo_url(request, raw_logo_rel)
+    logo_url = logo_state["logo_url"] or raw_logo_rel
+
+    pending_logo = logo_state["pending_logo"]
+    if not pending_logo and (comp.logo_status == "pending" or logo_state["status"] == "pending") and raw_logo_rel:
+        meta = get_logo_original_meta(Path(raw_logo_rel).name) if raw_logo_rel else {"orig_width": 256, "orig_height": 256, "orig_ratio": 1.0}
+        pending_logo = {
+            "id": None, "version": comp.logo_version or 1,
+            "file_key": Path(raw_logo_rel).name, "file_key_2x": Path(raw_logo_rel).name,
+            "logo_url": raw_logo_rel, "logo_full_url": full_url,
+            "logo_url_2x": None, "logo_full_url_2x": None, "original_url": full_url,
+            "orig_width": meta["orig_width"], "orig_height": meta["orig_height"], "orig_ratio": meta["orig_ratio"],
+            "uploader_name": uploader_name or (owner.full_name if owner else "Nhà tuyển dụng"),
+            "created_at": comp.logo_uploaded_at.isoformat() if comp.logo_uploaded_at else "",
+        }
 
     return {
         "id": comp.id, "name": comp.name, "slug": comp.slug,
@@ -69,9 +85,10 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
         "website": comp.website, "address": comp.address,
         "status": comp.status.value if hasattr(comp.status, "value") else str(comp.status),
         "open_jobs_count": int(open_jobs or 0),
-        "logo_url": logo_state["logo_url"],
-        "logo_path": logo_state["logo_path"],
-        "logo_full_url": logo_state["logo_full_url"],
+        "logo": raw_logo_rel,
+        "logo_url": logo_url,
+        "logo_path": logo_state["logo_path"] or raw_logo_rel,
+        "logo_full_url": full_url,
         "logo_url_2x": logo_state["logo_url_2x"],
         "logo_status": logo_state["status"],
         "logo_status_label": logo_state["label"],
@@ -80,7 +97,7 @@ def _serialize_company(db: Session, request: Request, comp: Company, open_jobs: 
         "logo_uploaded_by_name": uploader_name,
         "logo_uploaded_at": comp.logo_uploaded_at.isoformat() if comp.logo_uploaded_at else None,
         "updated_at": comp.updated_at.isoformat() if comp.updated_at else None,
-        "pending_logo": logo_state["pending_logo"],
+        "pending_logo": pending_logo,
     }
 
 
