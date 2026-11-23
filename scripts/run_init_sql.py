@@ -46,6 +46,7 @@ def main():
         port=settings.DB_PORT,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
         charset="utf8mb4",
         client_flag=CLIENT.MULTI_STATEMENTS,
     )

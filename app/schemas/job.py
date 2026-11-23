@@ -170,6 +170,7 @@ class BulkJobActionOut(BaseModel):
 class PublicJobCardOut(BaseModel):
     id: int
     title: str
+    status: str | None = None
     company_id: int | None = None
     company_slug: str | None = None
     company_name: str

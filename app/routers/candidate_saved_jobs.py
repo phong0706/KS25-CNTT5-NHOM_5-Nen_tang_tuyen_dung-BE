@@ -6,7 +6,7 @@ import json
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import role_required
@@ -52,7 +52,11 @@ def list_saved_jobs(
 
     # Sắp xếp
     if sort == "expiring_soon":
-        stmt = stmt.order_by(Job.deadline.asc().nulls_last(), SavedJob.created_at.desc())
+        stmt = stmt.order_by(
+            case((Job.deadline.is_(None), 1), else_=0).asc(),
+            Job.deadline.asc(),
+            SavedJob.created_at.desc(),
+        )
     else:  # newest
         stmt = stmt.order_by(SavedJob.created_at.desc())
 
@@ -87,6 +91,7 @@ def list_saved_jobs(
             PublicJobCardOut(
                 id=jb.id,
                 title=jb.title,
+                status=jb.status,
                 company_id=jb.company_id,
                 company_slug=comp_slug,
                 company_name=comp_name,
