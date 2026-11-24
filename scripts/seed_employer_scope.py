@@ -1,5 +1,6 @@
 """Seed 2 công ty độc lập (Sao Khuê & Xanh Lam) có tin đủ trạng thái đi qua service và hồ sơ khác nhau."""
 from datetime import date, datetime, timedelta, timezone
+import os
 from pathlib import Path
 import sys
 
@@ -21,7 +22,7 @@ def _ensure_user(db: Session, email: str, full_name: str, role: str) -> User:
     if not u:
         u = User(
             email=email,
-            password=hash_password("SeedPass123!"),
+            password=hash_password(os.getenv("SEED_USER_PASSWORD", "TechRecruit2026!")),
             full_name=full_name,
             role=role,
             is_active=True,

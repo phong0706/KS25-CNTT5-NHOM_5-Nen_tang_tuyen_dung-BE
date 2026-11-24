@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.core.security import hash_password
 from app.db.session import Base
 from app.models.company import Company
 from app.models.company_follow import CompanyFollow
@@ -38,8 +39,8 @@ def test_candidate_follow_list_and_unfollow_company():
     )
 
     with Session(engine) as db:
-        employer = User(email="employer@example.com", password="x", full_name="Employer", role="employer")
-        candidate = User(email="candidate@example.com", password="x", full_name="Candidate")
+        employer = User(email="employer@example.com", password=hash_password("TestPass123!"), full_name="Employer", role="employer")
+        candidate = User(email="candidate@example.com", password=hash_password("TestPass123!"), full_name="Candidate")
         db.add_all([employer, candidate])
         db.flush()
         company = Company(

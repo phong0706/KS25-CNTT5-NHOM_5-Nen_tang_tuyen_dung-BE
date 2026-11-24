@@ -152,9 +152,14 @@ def me(current_user=Depends(get_current_user)):
 
 @router.post(
     "/logout",
-    summary="Đăng xuất tài khoản",
+    summary="Đăng xuất tài khoản và thu hồi JWT hiện tại",
 )
-def logout():
-    """Đăng xuất người dùng phía client."""
+def logout(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Tăng token_version để vô hiệu hoá mọi JWT đã cấp trước đó của người dùng."""
+    current_user.token_version = (getattr(current_user, "token_version", 1) or 1) + 1
+    db.commit()
     return {"message": "Đã đăng xuất thành công"}
 

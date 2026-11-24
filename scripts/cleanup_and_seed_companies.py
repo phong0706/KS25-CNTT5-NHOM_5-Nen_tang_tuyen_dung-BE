@@ -1,6 +1,7 @@
 """Script dọn dẹp dữ liệu công ty test và chuẩn hóa 10 công ty công nghệ thực tế (<= 195 dòng).
 Chạy: python scripts/cleanup_and_seed_companies.py
 """
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -81,7 +82,7 @@ def seed_real_companies(db):
     for slug, name, mst, email, web, addr, tag, desc, sz, yr, vst, reason in COMPANIES_DATA:
         emp = db.scalar(select(User).where(User.email == email))
         if not emp:
-            emp = User(email=email, password=hash_password("TechRecruit2026!"), full_name=f"Tuyển dụng {name}", role="employer", is_active=True, created_at=old_date)
+            emp = User(email=email, password=hash_password(os.getenv("SEED_USER_PASSWORD", "TechRecruit2026!")), full_name=f"Tuyển dụng {name}", role="employer", is_active=True, created_at=old_date)
             db.add(emp); db.flush()
         else:
             emp.full_name, emp.is_active = f"Tuyển dụng {name}", True

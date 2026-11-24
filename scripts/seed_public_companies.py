@@ -2,6 +2,7 @@
 Cách chạy: cd backend && python scripts/seed_public_companies.py
 """
 from datetime import date, timedelta
+import os
 from pathlib import Path
 import sys
 from sqlalchemy import select, text
@@ -85,7 +86,7 @@ def run_seed() -> None:
 
         emp = db.scalar(select(User).where(User.role == "employer").order_by(User.id.asc()))
         if not emp:
-            emp = User(email="demo.employer@techrecruit.local", password=hash_password("DemoPass123!"), full_name="Demo Employer", role="employer", is_active=True)
+            emp = User(email="demo.employer@techrecruit.local", password=hash_password(os.getenv("SEED_USER_PASSWORD", "TechRecruit2026!")), full_name="Demo Employer", role="employer", is_active=True)
             db.add(emp); db.flush()
 
         for slug, name, tag, ind_id, loc_id, sz, yr, web, vis, ver, desc, jobs_spec in FICTIONAL_SEED:
