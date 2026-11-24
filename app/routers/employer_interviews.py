@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import role_required
+from app.core.employer_scope import EmployerScope, get_employer_scope
 from app.db.session import get_db
 from app.models.application import Application, Interview
 from app.models.job import Job
@@ -29,7 +29,7 @@ def list_interviews(
     to_date: date | None = Query(None, alias="to"),
     job_id: int | None = Query(None),
     status: str | None = Query(None),
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     stmt = (
@@ -37,7 +37,7 @@ def list_interviews(
         .join(Application, Interview.application_id == Application.id)
         .join(Job, Application.job_id == Job.id)
         .join(User, Application.candidate_id == User.id)
-        .where(Job.employer_id == current_user.id)
+        .where(Job.company_id == scope.company_id, Job.deleted_at.is_(None))
     )
     if job_id:
         stmt = stmt.where(Job.id == job_id)
@@ -75,14 +75,14 @@ def list_interviews(
 def reschedule_interview(
     interview_id: int,
     body: EmployerInterviewScheduleIn,
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     iv = db.scalar(
         select(Interview)
         .join(Application, Interview.application_id == Application.id)
         .join(Job, Application.job_id == Job.id)
-        .where(Interview.id == interview_id, Job.employer_id == current_user.id)
+        .where(Interview.id == interview_id, Job.company_id == scope.company_id, Job.deleted_at.is_(None))
     )
     if not iv:
         raise HTTPException(status_code=404, detail="Lịch phỏng vấn không tồn tại hoặc không thuộc quyền quản lý.")
@@ -95,7 +95,7 @@ def reschedule_interview(
         )
 
     if not body.force:
-        overlap = check_interview_overlap(db, current_user.id, body.scheduled_at, body.duration_min, exclude_id=iv.id)
+        overlap = check_interview_overlap(db, scope.user_id, body.scheduled_at, body.duration_min, exclude_id=iv.id)
         if overlap:
             raise HTTPException(
                 status_code=409,
@@ -127,7 +127,7 @@ def reschedule_interview(
             application_id=app.id,
             job_title=job_title,
             interview_at=body.scheduled_at,
-            actor_id=current_user.id,
+            actor_id=scope.user_id,
         )
 
     db.commit()
@@ -138,14 +138,14 @@ def reschedule_interview(
 def cancel_interview(
     interview_id: int,
     body: InterviewCancelIn,
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     iv = db.scalar(
         select(Interview)
         .join(Application, Interview.application_id == Application.id)
         .join(Job, Application.job_id == Job.id)
-        .where(Interview.id == interview_id, Job.employer_id == current_user.id)
+        .where(Interview.id == interview_id, Job.company_id == scope.company_id, Job.deleted_at.is_(None))
     )
     if not iv:
         raise HTTPException(status_code=404, detail="Lịch phỏng vấn không tồn tại.")
@@ -162,7 +162,7 @@ def cancel_interview(
             application_id=app.id,
             job_title=job_title,
             reason=body.reason,
-            actor_id=current_user.id,
+            actor_id=scope.user_id,
         )
 
     db.commit()
@@ -172,14 +172,14 @@ def cancel_interview(
 @router.post("/{interview_id}/done", summary="Đánh dấu đã hoàn thành phỏng vấn")
 def mark_interview_done(
     interview_id: int,
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     iv = db.scalar(
         select(Interview)
         .join(Application, Interview.application_id == Application.id)
         .join(Job, Application.job_id == Job.id)
-        .where(Interview.id == interview_id, Job.employer_id == current_user.id)
+        .where(Interview.id == interview_id, Job.company_id == scope.company_id, Job.deleted_at.is_(None))
     )
     if not iv:
         raise HTTPException(status_code=404, detail="Lịch phỏng vấn không tồn tại.")

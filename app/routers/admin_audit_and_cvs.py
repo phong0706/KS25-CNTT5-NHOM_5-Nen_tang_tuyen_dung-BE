@@ -24,7 +24,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Audit & CV Governance"])
 
 @router.post("/companies/{company_id}/logo/remove", summary="Gỡ logo công ty (chỉ đổi trạng thái, không xóa file vật lý)")
 def remove_company_logo_admin(
-    company_id: int, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    company_id: int, request: Request, current_user: User = Depends(role_required("admin", "operator", "employer", "recruiter")), db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)
     if not comp:
@@ -126,7 +126,7 @@ def list_admin_candidate_cvs(
 @router.get("/candidate-cvs/{app_id}/file", summary="Mở file CV cho khu quản trị (kiểm tra quyền, ghi nhật ký mỗi lần mở)")
 def open_admin_candidate_cv_file(
     app_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("admin", "operator")),
     db: Session = Depends(get_db),
 ):
     if current_user.role not in ("admin", "operator"):

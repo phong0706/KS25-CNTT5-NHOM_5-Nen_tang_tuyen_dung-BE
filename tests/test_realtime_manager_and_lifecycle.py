@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.user import User
@@ -167,7 +167,7 @@ def test_ws_slow_consumer_queue_overflow(users_fixture):
 def test_ws_user_lock_disconnects_all_connections(users_fixture):
     """Khóa tài khoản qua API admin -> mọi kết nối của user bị đóng 4403 ngay lập tức."""
     db = SessionLocal()
-    test_u = User(email="victim_lock_ws@test.vn", password="pwd", full_name="Victim WS", role="candidate", is_active=True)
+    test_u = User(email="victim_lock_ws@test.vn", password=hash_password("TestPass123!"), full_name="Victim WS", role="candidate", is_active=True)
     db.add(test_u)
     db.commit()
     db.refresh(test_u)

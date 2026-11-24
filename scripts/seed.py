@@ -60,11 +60,17 @@ def run_seed():
         for name in skills:
             exists = db.query(Skill).filter_by(name=name).first()
             if not exists:
-                db.add(Skill(name=name, status="active"))
+                from sqlalchemy import text
+                db.execute(
+                    text("INSERT IGNORE INTO skills (name, canonical_name, status) VALUES (:n, :c, 'active')"),
+                    {"n": name, "c": name.lower()},
+                )
         print(f"Đã kiểm tra và seed xong {len(skills)} kỹ năng.")
 
         # Lưu thay đổi vào cơ sở dữ liệu
         db.commit()
+        from scripts.seed_employer_scope import seed_two_companies_via_service
+        seed_two_companies_via_service(db)
         print("Seed dữ liệu thành công hoàn toàn!")
 
     except Exception as e:

@@ -25,12 +25,15 @@ def _send_moderation_notification(db: Session, uid: int, title: str, msg: str, r
     ))
 
 
-def _get_verified_job_for_employer(db: Session, job_id: int, employer_id: int) -> Job:
+def _get_verified_job_for_employer(db: Session, job_id: int, employer_id: int, company_id: int | None = None) -> Job:
     job = db.get(Job, job_id)
     if not job or job.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
-    if job.employer_id != employer_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền với tin này.")
+    if company_id is not None:
+        if job.company_id != company_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
+    elif job.employer_id != employer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
     company = db.get(Company, job.company_id) if job.company_id else None
     is_verif = company and (
         company.verification_status == "da_xac_minh" or
@@ -45,8 +48,8 @@ def _get_verified_job_for_employer(db: Session, job_id: int, employer_id: int) -
     return job
 
 
-def submit_job_for_review_service(db: Session, job_id: int, employer_id: int, expected_version: int) -> Job:
-    job = _get_verified_job_for_employer(db, job_id, employer_id)
+def submit_job_for_review_service(db: Session, job_id: int, employer_id: int, expected_version: int, company_id: int | None = None) -> Job:
+    job = _get_verified_job_for_employer(db, job_id, employer_id, company_id=company_id)
     validate_job_transition(job.status, "pending", "employer")
     validate_optimistic_version(expected_version, job.version)
     old_st = job.status
@@ -64,12 +67,15 @@ def submit_job_for_review_service(db: Session, job_id: int, employer_id: int, ex
     return job
 
 
-def withdraw_job_to_draft_service(db: Session, job_id: int, employer_id: int, expected_version: int) -> Job:
+def withdraw_job_to_draft_service(db: Session, job_id: int, employer_id: int, expected_version: int, company_id: int | None = None) -> Job:
     job = db.get(Job, job_id)
     if not job or job.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
-    if job.employer_id != employer_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền với tin này.")
+    if company_id is not None:
+        if job.company_id != company_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
+    elif job.employer_id != employer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tin.")
     validate_job_transition(job.status, "draft", "employer")
     validate_optimistic_version(expected_version, job.version)
     old_st = job.status

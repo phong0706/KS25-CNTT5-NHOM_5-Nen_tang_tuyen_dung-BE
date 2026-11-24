@@ -4,7 +4,7 @@ from PIL import Image
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.company import Company, CompanyStatus
@@ -26,7 +26,7 @@ def logo_test_env():
     # Tạo employer user và company
     emp = db.query(User).filter(User.email == "test_emp_logo@tuyendung.com").first()
     if not emp:
-        emp = User(email="test_emp_logo@tuyendung.com", role="employer", full_name="Logo Employer", password="dummy")
+        emp = User(email="test_emp_logo@tuyendung.com", role="employer", full_name="Logo Employer", password=hash_password("TestPass123!"))
         db.add(emp)
         db.flush()
 
@@ -39,7 +39,7 @@ def logo_test_env():
     # Tạo admin user
     adm = db.query(User).filter(User.email == "test_adm_logo@tuyendung.com").first()
     if not adm:
-        adm = User(email="test_adm_logo@tuyendung.com", role="admin", full_name="Logo Admin", password="dummy")
+        adm = User(email="test_adm_logo@tuyendung.com", role="admin", full_name="Logo Admin", password=hash_password("TestPass123!"))
         db.add(adm)
         db.flush()
 

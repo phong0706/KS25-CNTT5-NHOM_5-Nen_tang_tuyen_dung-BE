@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, get_optional_user
+from app.core.security import get_optional_user, role_required
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.job import FeaturedCompanyOut, HomeStatsOut, PublicJobsSearchOut
@@ -53,7 +53,7 @@ def get_home_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/save", summary="Lưu hoặc bỏ lưu việc làm (cần đăng nhập)")
-def toggle_save_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def toggle_save_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(role_required("candidate"))):
     return toggle_saved_job_action(db, job_id, current_user)
 
 

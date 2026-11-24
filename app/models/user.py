@@ -1,9 +1,10 @@
 """Model cho bảng users (đã tạo bằng sql/init.sql, SQLAlchemy chỉ map lại)."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, event, func, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.security import is_bcrypt_hash
 from app.db.session import Base
 
 
@@ -27,3 +28,18 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+@event.listens_for(User, "before_insert")
+def _enforce_bcrypt_password_on_insert(mapper, connection, target: User) -> None:
+    """Chốt chặn ORM khi tạo mới: không cho phép lưu mật khẩu thô hoặc hash không phải bcrypt."""
+    if not is_bcrypt_hash(target.password):
+        raise ValueError("Mật khẩu User phải được băm bằng bcrypt trước khi lưu vào DB")
+
+
+@event.listens_for(User, "before_update")
+def _enforce_bcrypt_password_on_update(mapper, connection, target: User) -> None:
+    """Chốt chặn ORM khi cập nhật password: không cho phép ghi đè bằng mật khẩu thô."""
+    hist = inspect(target).attrs.password.history
+    if hist.has_changes() and not is_bcrypt_hash(target.password):
+        raise ValueError("Mật khẩu User phải được băm bằng bcrypt trước khi lưu vào DB")

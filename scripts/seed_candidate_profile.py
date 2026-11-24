@@ -1,5 +1,6 @@
 """Script seed dữ liệu mẫu hồ sơ ứng viên vào MySQL (chạy một lần hoặc lặp lại an toàn)."""
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def seed():
         if not user:
             user = User(
                 email="candidate@techrecruit.vn",
-                password=hash_password("Candidate@123"),
+                password=hash_password(os.getenv("SEED_USER_PASSWORD", "TechRecruit2026!")),
                 full_name="Nguyễn Minh Anh",
                 phone="0912345678",
                 role="candidate",

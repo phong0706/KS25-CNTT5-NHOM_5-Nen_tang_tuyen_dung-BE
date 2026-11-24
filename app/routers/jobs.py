@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, get_optional_user
+from app.core.security import get_optional_user, role_required
 from app.crud import job as job_crud
 from app.crud import saved_job as saved_job_crud
 from app.db.session import get_db
@@ -296,7 +296,7 @@ def get_job_detail(
 )
 def create_job(
     data: JobCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin")),
     db: Session = Depends(get_db),
 ):
     if current_user.role not in {"employer", "admin"}:
@@ -330,7 +330,7 @@ def create_job(
 def update_job(
     job_id: int,
     data: JobUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter")),
     db: Session = Depends(get_db),
 ):
     if current_user.role != "employer":
@@ -361,7 +361,7 @@ def update_job(
 def update_job_status(
     job_id: int,
     data: JobStatusUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin")),
     db: Session = Depends(get_db),
 ):
     if current_user.role not in {"employer", "admin"}:
@@ -409,7 +409,7 @@ def update_job_status(
 )
 def create_saved_job(
     data: SavedJobCreate,
-    current_user: User | None = Depends(get_optional_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Lưu tin tuyển dụng cho ứng viên.
@@ -430,7 +430,7 @@ def create_saved_job(
     summary="Xem danh sách tin đã lưu của ứng viên đang đăng nhập",
 )
 def list_my_saved_jobs(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Lấy danh sách tin đã lưu của ứng viên hiện tại (dựa trên JWT token)."""
@@ -445,12 +445,14 @@ def list_my_saved_jobs(
 )
 def list_saved_jobs(
     candidate_profile_id: int,
-    current_user: User | None = Depends(get_optional_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     profile_id = _resolve_candidate_profile_for_action(
-        db, current_user, candidate_profile_id
+        db, current_user, None
     )
+    if candidate_profile_id != profile_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ ứng viên")
     return saved_job_crud.get_saved_jobs(db, profile_id)
 
 
@@ -461,7 +463,7 @@ def list_saved_jobs(
 )
 def remove_my_saved_job(
     job_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     profile_id = _resolve_candidate_profile_for_action(db, current_user)
@@ -480,12 +482,14 @@ def remove_my_saved_job(
 def remove_saved_job(
     candidate_profile_id: int,
     job_id: int,
-    current_user: User | None = Depends(get_optional_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     profile_id = _resolve_candidate_profile_for_action(
-        db, current_user, candidate_profile_id
+        db, current_user, None
     )
+    if candidate_profile_id != profile_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ ứng viên")
     deleted = saved_job_crud.delete_saved_job(db, profile_id, job_id)
     if not deleted:
         raise HTTPException(

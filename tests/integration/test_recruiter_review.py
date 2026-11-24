@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.application import Application, ApplicationStatusHistory, Interview
@@ -58,7 +58,7 @@ def review_data():
         roles = ("employer", "employer", "candidate", "candidate")
         users = [
             User(
-                email=f"review-{tag}-{i}@example.com", password="unused",
+                email=f"review-{tag}-{i}@example.com", password=hash_password("TestPass123!"),
                 full_name=f"Review test {i}", role=role,
             )
             for i, role in enumerate(roles)

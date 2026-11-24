@@ -9,17 +9,25 @@ from app.models.company import Company
 from app.models.job import Job
 
 
-def get_active_job_conds(company_id: int | None = None) -> list:
-    """Trả về danh sách điều kiện SQLAlchemy chuẩn hóa duy nhất cho việc làm 'đang tuyển'."""
+def open_jobs_clause(company_id: int | None = None) -> list:
+    """Định nghĩa chuẩn hóa duy nhất cho việc làm 'đang tuyển' toàn hệ thống."""
     conds = [
-        Job.status == "published",
-        Company.is_visible == True,  # noqa: E712
+        Job.status.in_(["published", "open"]),
+        Job.deleted_at.is_(None),
         or_(Job.deadline.is_(None), Job.deadline >= date.today()),
-        ~Job.title.regexp_match(r"(?i)^(mmmmmm|test\b|test\s+|.*test\s+job|valid\s+engineer|pending\s+engineer)"),
+        Company.is_visible == True,  # noqa: E712
     ]
     if company_id is not None:
         conds.append(Job.company_id == company_id)
     return conds
+
+
+def get_active_job_conds(company_id: int | None = None) -> list:
+    """Trả về danh sách điều kiện SQLAlchemy cho hero/thống kê công khai (lọc thêm tin test)."""
+    return [
+        *open_jobs_clause(company_id=company_id),
+        ~Job.title.regexp_match(r"(?i)^(mmmmmm|test\b|test\s+|.*test\s+job|valid\s+engineer|pending\s+engineer)"),
+    ]
 
 
 def count_active_jobs(db: Session, company_id: int | None = None) -> int:

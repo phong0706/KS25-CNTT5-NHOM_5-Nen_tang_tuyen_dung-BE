@@ -150,7 +150,7 @@ def upload_company_logo_admin(
     company_id: int,
     request: Request,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("admin", "operator", "employer", "recruiter")),
     db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)

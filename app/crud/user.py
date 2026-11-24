@@ -76,9 +76,10 @@ def get_users(
 
 
 def lock_user(db: Session, *, user: User, locked_reason: str) -> User:
-    """Khoá tài khoản: is_active=False + lưu lý do khoá."""
+    """Khoá tài khoản: is_active=False, tăng token_version để thu hồi phiên, lưu lý do khoá."""
     user.is_active = False
     user.locked_reason = locked_reason
+    user.token_version = (getattr(user, "token_version", 1) or 1) + 1
     db.commit()
     db.refresh(user)
     return user

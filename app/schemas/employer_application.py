@@ -119,6 +119,30 @@ class EmployerStatusUpdateIn(BaseModel):
     rejection_reason_slug: str | None = None
 
 
+class RejectApplicationIn(BaseModel):
+    reason_code: str = Field(..., min_length=1, max_length=80)
+    message: str | None = Field(default=None, max_length=500)
+
+
+class BulkRejectApplicationsIn(BaseModel):
+    ids: list[int] = Field(..., min_length=1, max_length=50)
+    reason_code: str = Field(..., min_length=1, max_length=80)
+    message: str | None = Field(default=None, max_length=500)
+
+
+class BulkRejectItemResult(BaseModel):
+    id: int
+    status: str  # rejected | skipped
+    detail: str
+
+
+class BulkRejectOut(BaseModel):
+    total: int
+    rejected_count: int
+    skipped_count: int
+    results: list[BulkRejectItemResult]
+
+
 
 # ── ADMIN SCHEMAS ─────────────────────────────────────────────
 

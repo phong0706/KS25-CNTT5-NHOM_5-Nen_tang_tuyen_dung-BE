@@ -10,6 +10,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import role_required
 from app.crud import catalog as catalog_crud
 from app.db.session import get_db
 from app.schemas.catalog_schema import CatalogCreate, CatalogUpdate, CatalogResponse
@@ -44,7 +45,7 @@ def get_location(location=Depends(get_location_or_404)):
 
 
 @router.post("", response_model=CatalogResponse, status_code=status.HTTP_201_CREATED)
-def create_location(data: CatalogCreate, db: Session = Depends(get_db)):
+def create_location(data: CatalogCreate, db: Session = Depends(get_db), _admin=Depends(role_required("admin"))):
     """Tạo địa điểm mới. Tên phải duy nhất."""
     try:
         return catalog_crud.create_location(db, data)
@@ -55,8 +56,9 @@ def create_location(data: CatalogCreate, db: Session = Depends(get_db)):
 @router.put("/{location_id}", response_model=CatalogResponse)
 def update_location(
     data: CatalogUpdate,
+    _admin=Depends(role_required("admin")),
     location=Depends(get_location_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Cập nhật địa điểm. Tên mới không được trùng với địa điểm khác."""
     try:
@@ -67,8 +69,9 @@ def update_location(
 
 @router.delete("/{location_id}", response_model=CatalogResponse)
 def delete_location(
+    _admin=Depends(role_required("admin")),
     location=Depends(get_location_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Ẩn địa điểm (soft delete: đổi status='inactive').

@@ -137,6 +137,8 @@ def toggle_user_status(
     user.is_active = not user.is_active
     if user.is_active and hasattr(user, "locked_reason"):
         user.locked_reason = None
+    elif not user.is_active:
+        user.token_version = (getattr(user, "token_version", 1) or 1) + 1
 
     db.commit()
     db.refresh(user)

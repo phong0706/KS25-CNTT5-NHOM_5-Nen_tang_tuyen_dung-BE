@@ -8,7 +8,7 @@ import json
 import statistics
 
 from app.db.session import get_db
-from app.core.security import get_current_user
+from app.core.security import role_required
 
 router = APIRouter(tags=["Salary & Matching"])
 
@@ -78,7 +78,7 @@ class MatchedJobItem(BaseModel):
     missing_skills: List[str]
 
 @router.get("/api/candidate/matched-jobs", summary="Việc làm phù hợp với kỹ năng của ứng viên")
-def get_matched_jobs(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def get_matched_jobs(db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 

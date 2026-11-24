@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.security import role_required
+from app.core.employer_scope import EmployerScope, get_employer_scope
 from app.crud.application import get_status_history_by_application
 from app.db.session import get_db
 from app.models.application import (
@@ -25,10 +25,11 @@ from app.models.user import User
 from app.schemas.application import AppTabOut, InterviewInfo, StatusHistoryItem
 from app.schemas.employer_application import (
     ApplicantCandidateOut, ApplicantJobOut, ApplicationNoteCreateIn,
-    ApplicationNoteOut, EmployerApplicationDetailOut,
-    EmployerApplicationItemOut, EmployerApplicationListOut,
-    EmployerInterviewScheduleIn, EmployerStatusUpdateIn,
+    ApplicationNoteOut, BulkRejectApplicationsIn, BulkRejectItemResult, BulkRejectOut,
+    EmployerApplicationDetailOut, EmployerApplicationItemOut, EmployerApplicationListOut,
+    EmployerInterviewScheduleIn, EmployerStatusUpdateIn, RejectApplicationIn,
 )
+from app.services.application_reject_service import reject_application_core, validate_rejection_reason
 from app.services.cv_service import get_cv_file_path
 from app.services.interview_service import check_interview_overlap
 from app.services.matching import compute_job_match
@@ -37,8 +38,8 @@ from app.services.notification import notify_application_status_changed, notify_
 router = APIRouter(prefix="/employer/applications", tags=["Employer Applications"])
 
 ALLOWED_TRANSITIONS = {
-    ApplicationStatus.SUBMITTED: (ApplicationStatus.REVIEWING,),
-    ApplicationStatus.REVIEWING: (ApplicationStatus.INTERVIEW,),
+    ApplicationStatus.SUBMITTED: (ApplicationStatus.REVIEWING, ApplicationStatus.REJECTED),
+    ApplicationStatus.REVIEWING: (ApplicationStatus.INTERVIEW, ApplicationStatus.REJECTED),
     ApplicationStatus.INTERVIEW: (ApplicationStatus.OFFERED, ApplicationStatus.REJECTED),
 }
 
@@ -55,17 +56,13 @@ def _stored_status(status: str, previous: str) -> str:
     return _legacy_status(status) if previous.islower() else status
 
 
-def _company_job_ids(employer_id: int):
-    return (
-        select(Job.id)
-        .join(Company, Job.company_id == Company.id)
-        .where(Company.employer_id == employer_id)
-    )
+def _company_job_ids(company_id: int):
+    return select(Job.id).where(Job.company_id == company_id, Job.deleted_at.is_(None))
 
 
-def _company_application(app_id: int, employer_id: int):
+def _company_application(app_id: int, company_id: int):
     return select(Application).where(
-        Application.id == app_id, Application.job_id.in_(_company_job_ids(employer_id)),
+        Application.id == app_id, Application.job_id.in_(_company_job_ids(company_id)),
     )
 
 
@@ -170,12 +167,12 @@ def _calc_match_score(job_obj_or_skills, cand_prof_or_skills) -> int:
 
 @router.get("/unviewed-count", summary="Số lượng hồ sơ chưa xem")
 def get_unviewed_count(
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     count = db.scalar(
         select(func.count(Application.id))
-        .where(Application.job_id.in_(_company_job_ids(current_user.id)), Application.viewed_at.is_(None))
+        .where(Application.job_id.in_(_company_job_ids(scope.company_id)), Application.viewed_at.is_(None))
     ) or 0
     return {"count": count}
 
@@ -187,10 +184,10 @@ def list_employer_applications(
     sort: str = Query("newest"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
-    company_job_ids = _company_job_ids(current_user.id)
+    company_job_ids = _company_job_ids(scope.company_id)
     my_jobs_rows = db.execute(
         select(Job.id, Job.title).where(Job.id.in_(company_job_ids)).order_by(Job.created_at.desc())
     ).all()
@@ -256,7 +253,7 @@ def list_employer_applications(
 
 @router.get("/{app_id}", response_model=EmployerApplicationDetailOut, summary="Chi tiết hồ sơ ứng viên")
 def get_employer_application_detail(
-    app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
     row = db.execute(
         select(
@@ -267,7 +264,7 @@ def get_employer_application_detail(
         .join(Company, Job.company_id == Company.id)
         .outerjoin(CandidateProfile, _candidate_profile_join())
         .join(User, User.id == func.coalesce(Application.candidate_id, CandidateProfile.user_id))
-        .where(Application.id == app_id, Company.employer_id == current_user.id)
+        .where(Application.id == app_id, Job.company_id == scope.company_id, Job.deleted_at.is_(None))
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại hoặc không thuộc quyền quản lý.")
@@ -301,24 +298,18 @@ def get_employer_application_detail(
 @router.get("/{app_id}/cv", summary="Xem / tải file CV của đơn ứng tuyển")
 def get_application_cv_file(
     app_id: int,
-    current_user=Depends(role_required("recruiter", "employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
     db: Session = Depends(get_db),
 ):
     row = db.execute(
-        select(Application, Company.employer_id)
+        select(Application, Job.company_id)
         .join(Job, Application.job_id == Job.id)
-        .outerjoin(Company, Job.company_id == Company.id)
-        .where(Application.id == app_id)
+        .where(Application.id == app_id, Job.deleted_at.is_(None))
     ).first()
-    if not row:
+    if not row or row[1] != scope.company_id:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
 
-    app_row, job_owner_id = row[0], row[1]
-    if job_owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Bạn không có quyền xem CV của đơn ứng tuyển thuộc tin tuyển dụng khác.",
-        )
+    app_row = row[0]
 
     if not app_row.cv_id:
         raise HTTPException(status_code=404, detail="Đơn ứng tuyển này không có file CV đính kèm.")
@@ -355,9 +346,9 @@ def get_application_cv_file(
 
 @router.post("/{app_id}/view", summary="Đánh dấu đã xem hồ sơ")
 def mark_application_viewed(
-    app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
-    app = db.scalar(_company_application(app_id, current_user.id))
+    app = db.scalar(_company_application(app_id, scope.company_id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
     if app.viewed_at is None:
@@ -367,9 +358,9 @@ def mark_application_viewed(
 
 @router.get("/{app_id}/notes", response_model=list[ApplicationNoteOut], summary="Danh sách ghi chú nội bộ")
 def list_application_notes(
-    app_id: int, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
-    app = db.scalar(_company_application(app_id, current_user.id))
+    app = db.scalar(_company_application(app_id, scope.company_id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
     rows = db.execute(
@@ -382,28 +373,34 @@ def list_application_notes(
 
 @router.post("/{app_id}/notes", response_model=ApplicationNoteOut, summary="Thêm ghi chú nội bộ")
 def add_application_note(
-    app_id: int, body: ApplicationNoteCreateIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, body: ApplicationNoteCreateIn, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
-    app = db.scalar(_company_application(app_id, current_user.id))
+    app = db.scalar(_company_application(app_id, scope.company_id))
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
-    note = ApplicationNote(application_id=app.id, author_id=current_user.id, content=body.content.strip())
+    note = ApplicationNote(application_id=app.id, author_id=scope.user_id, content=body.content.strip())
     db.add(note)
     db.commit()
     db.refresh(note)
-    return ApplicationNoteOut(id=note.id, application_id=note.application_id, author_id=note.author_id, author_name=current_user.full_name or "Nhà tuyển dụng", content=note.content, created_at=note.created_at)
+    return ApplicationNoteOut(id=note.id, application_id=note.application_id, author_id=note.author_id, author_name=scope.user.full_name or "Nhà tuyển dụng", content=note.content, created_at=note.created_at)
 
 @router.patch("/{app_id}/status", summary="Cập nhật trạng thái hồ sơ")
 def update_application_status(
-    app_id: int, body: EmployerStatusUpdateIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, body: EmployerStatusUpdateIn, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
-    app = db.scalar(_company_application(app_id, current_user.id).with_for_update())
+    app = db.scalar(_company_application(app_id, scope.company_id).with_for_update())
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
 
     target = _normalize_status(body.status)
     if target not in {status.value for status in ApplicationStatus}:
         raise HTTPException(status_code=422, detail="Trạng thái không hợp lệ.")
+
+    if target == ApplicationStatus.REJECTED:
+        reason = validate_rejection_reason(db, body.rejection_reason_slug or "")
+        res = reject_application_core(db, app, scope.user_id, reason, body.note)
+        db.commit()
+        return {"message": res["message"], "status": res["status"]}
 
     old_status = app.status
     new_status = _stored_status(target, old_status)
@@ -434,13 +431,13 @@ def update_application_status(
         app.employer_notes = body.note
     db.add(ApplicationStatusHistory(
         application_id=app.id, status=new_status, old_status=old_status, new_status=new_status,
-        changed_by_user_id=current_user.id, note=note_text,
+        changed_by_user_id=scope.user_id, note=note_text,
     ))
     notification = None
     if candidate_id is not None:
         notification = notify_application_status_changed(
             db, candidate_id=candidate_id, status=new_status, status_label=target_label,
-            job_title=job_title, application_id=app.id, actor_id=current_user.id, note=body.note,
+            job_title=job_title, application_id=app.id, actor_id=scope.user_id, note=body.note,
         )
     if notification is None:
         db.rollback()
@@ -450,9 +447,9 @@ def update_application_status(
 
 @router.post("/{app_id}/interview", summary="Lên lịch hẹn phỏng vấn")
 def schedule_interview(
-    app_id: int, body: EmployerInterviewScheduleIn, current_user=Depends(role_required("recruiter", "employer")), db: Session = Depends(get_db),
+    app_id: int, body: EmployerInterviewScheduleIn, scope: EmployerScope = Depends(get_employer_scope), db: Session = Depends(get_db),
 ):
-    app = db.scalar(_company_application(app_id, current_user.id).with_for_update())
+    app = db.scalar(_company_application(app_id, scope.company_id).with_for_update())
     if not app:
         raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
 
@@ -464,7 +461,7 @@ def schedule_interview(
         raise HTTPException(status_code=409, detail=f"Không thể lên lịch phỏng vấn cho hồ sơ đang ở trạng thái '{current_name}'.")
 
     if not body.force:
-        overlap = check_interview_overlap(db, current_user.id, body.scheduled_at, body.duration_min)
+        overlap = check_interview_overlap(db, scope.user_id, body.scheduled_at, body.duration_min)
         if overlap:
             raise HTTPException(
                 status_code=409,
@@ -489,7 +486,7 @@ def schedule_interview(
         interviewer=body.interviewer,
         note=body.note,
         status="scheduled",
-        created_by=current_user.id,
+        created_by=scope.user_id,
     )
     db.add(iv)
 
@@ -503,14 +500,77 @@ def schedule_interview(
     note_text = body.note or f"Lên lịch phỏng vấn {body.mode}{loc_str}"
     db.add(ApplicationStatusHistory(
         application_id=app.id, status=app.status, old_status=old_status, new_status=app.status,
-        changed_by_user_id=current_user.id, note=note_text,
+        changed_by_user_id=scope.user_id, note=note_text,
     ))
 
     job_title = db.scalar(select(Job.title).where(Job.id == app.job_id)) or ""
     notify_interview(
         db, candidate_id=_candidate_user_id(db, app), application_id=app.id, job_title=job_title,
         interview_at=body.scheduled_at, interview_mode=body.mode,
-        interview_location=body.location_or_link, actor_id=current_user.id,
+        interview_location=body.location_or_link, actor_id=scope.user_id,
     )
     db.commit()
     return {"message": "Đã lên lịch hẹn phỏng vấn thành công!", "interview_id": iv.id, "scheduled_at": body.scheduled_at}
+
+
+@router.post("/bulk-reject", response_model=BulkRejectOut, summary="Từ chối hàng loạt hồ sơ")
+def bulk_reject_applications(
+    body: BulkRejectApplicationsIn,
+    scope: EmployerScope = Depends(get_employer_scope),
+    db: Session = Depends(get_db),
+):
+    reason = validate_rejection_reason(db, body.reason_code)
+    unique_ids = list(dict.fromkeys(body.ids))
+    apps = {
+        a.id: a
+        for a in db.scalars(
+            select(Application).where(
+                Application.id.in_(unique_ids),
+                Application.job_id.in_(_company_job_ids(scope.company_id)),
+            ).with_for_update()
+        ).all()
+    }
+    results: list[BulkRejectItemResult] = []
+    rejected_count = 0
+    skipped_count = 0
+    for app_id in unique_ids:
+        app = apps.get(app_id)
+        if not app:
+            skipped_count += 1
+            results.append(BulkRejectItemResult(id=app_id, status="skipped", detail="Không tìm thấy hồ sơ"))
+            continue
+        try:
+            res = reject_application_core(db, app, scope.user_id, reason, body.message)
+            if res.get("already_rejected"):
+                skipped_count += 1
+                results.append(BulkRejectItemResult(id=app_id, status="skipped", detail="Đã từ chối trước đó"))
+            else:
+                rejected_count += 1
+                results.append(BulkRejectItemResult(id=app_id, status="rejected", detail="Đã từ chối"))
+        except HTTPException as exc:
+            skipped_count += 1
+            results.append(BulkRejectItemResult(id=app_id, status="skipped", detail=str(exc.detail)))
+
+    db.commit()
+    return BulkRejectOut(
+        total=len(unique_ids),
+        rejected_count=rejected_count,
+        skipped_count=skipped_count,
+        results=results,
+    )
+
+
+@router.post("/{app_id}/reject", summary="Từ chối hồ sơ ứng viên")
+def reject_application(
+    app_id: int,
+    body: RejectApplicationIn,
+    scope: EmployerScope = Depends(get_employer_scope),
+    db: Session = Depends(get_db),
+):
+    reason = validate_rejection_reason(db, body.reason_code)
+    app = db.scalar(_company_application(app_id, scope.company_id).with_for_update())
+    if not app:
+        raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
+    res = reject_application_core(db, app, scope.user_id, reason, body.message)
+    db.commit()
+    return res

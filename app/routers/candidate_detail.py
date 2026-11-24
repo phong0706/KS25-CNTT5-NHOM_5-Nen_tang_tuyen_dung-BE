@@ -183,7 +183,7 @@ def withdraw_application(
 @router.get("/jobs/{job_id}/applied", summary="Kiểm tra đã ứng tuyển chưa")
 def check_applied(
     job_id: int,
-    current_user=Depends(get_current_user),
+    current_user=Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     app = db.scalar(

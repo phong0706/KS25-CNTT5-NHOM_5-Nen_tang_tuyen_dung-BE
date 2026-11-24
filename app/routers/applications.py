@@ -258,13 +258,13 @@ def list_my_applications(
 def get_application_detail(
     application_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate", "employer", "recruiter", "admin")),
 ):
     """Xem chi tiết đơn ứng tuyển.
     
     Quyền truy cập:
-    - Ứng viên: chỉ xem đơn của mình
-    - Nhà tuyển dụng: xem đơn ứng tuyển vào tin của mình
+    - Ứng viên: chỉ xem đơn của mình (404 nếu đơn của người khác)
+    - Nhà tuyển dụng: xem đơn ứng tuyển vào tin của mình (404 nếu của công ty khác)
     - Admin: xem tất cả
     """
     application = application_crud.get_application_by_id(db, application_id)
@@ -277,25 +277,22 @@ def get_application_detail(
     
     # Kiểm tra quyền truy cập
     if current_user.role == "admin":
-        # Admin xem tất cả
         pass
     elif current_user.role == "candidate":
-        # Ứng viên chỉ xem đơn của mình
         profile = get_candidate_profile(db, current_user.id)
         if application.candidate_profile_id != profile.id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bạn không có quyền xem đơn ứng tuyển của người khác.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy đơn ứng tuyển với id={application_id}",
             )
-    elif current_user.role == "employer":
-        # Nhà tuyển dụng xem đơn vào tin của mình
+    elif current_user.role in ("employer", "recruiter"):
         job = db.get(Job, application.job_id)
         if job:
             company = db.get(Company, job.company_id)
             if not company or company.employer_id != current_user.id:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Bạn chỉ có thể xem đơn ứng tuyển vào tin tuyển dụng của công ty mình.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Không tìm thấy đơn ứng tuyển với id={application_id}",
                 )
     else:
         raise HTTPException(

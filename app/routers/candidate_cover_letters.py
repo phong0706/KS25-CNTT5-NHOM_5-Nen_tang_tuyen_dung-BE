@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from app.db.session import get_db
-from app.core.security import get_current_user
+from app.core.security import role_required
 
 router = APIRouter(prefix="/candidate/cover-letters", tags=["Candidate Cover Letters"])
 
@@ -21,7 +21,7 @@ class CoverLetterCreate(BaseModel):
     content: str
 
 @router.get("", response_model=List[CoverLetterItem], summary="Danh sách thư giới thiệu của ứng viên")
-def get_my_cover_letters(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def get_my_cover_letters(db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 
@@ -41,7 +41,7 @@ def get_my_cover_letters(db: Session = Depends(get_db), current_user = Depends(g
     ]
 
 @router.post("", response_model=CoverLetterItem, status_code=status.HTTP_201_CREATED, summary="Tạo thư giới thiệu mới")
-def create_cover_letter(data: CoverLetterCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_cover_letter(data: CoverLetterCreate, db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 
@@ -54,7 +54,7 @@ def create_cover_letter(data: CoverLetterCreate, db: Session = Depends(get_db), 
     return CoverLetterItem(id=row.id, title=row.title, content=row.content, created_at=str(row.created_at))
 
 @router.delete("/{id}", summary="Xoá thư giới thiệu")
-def delete_cover_letter(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def delete_cover_letter(id: int, db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 

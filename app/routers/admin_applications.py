@@ -101,7 +101,7 @@ def list_all_applications_admin(
             candidate=ApplicantCandidateOut(id=cand.id, full_name=cand.full_name or "Ứng viên", email=cand.email, phone=cand.phone, avatar_url=cand.avatar_url),
             employer=AdminAppEmployerOut(id=emp_id or 0, full_name=emp.full_name if emp else "Nhà tuyển dụng", email=emp.email if emp else "", company_name=comp_name),
             cv_id=app_row.cv_id,
-            cv_name=app_row.cv_name_snapshot,
+            cv_name=app_row.cv_name_snapshot or "",
             cover_letter=app_row.cover_letter,
             status=app_row.status,
             status_label=meta.name if meta else app_row.status,

@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 import json
 
 from app.db.session import get_db
-from app.core.security import get_current_user
+from app.core.security import role_required
 from app.models.application import SavedSearch
 from app.models.company import Company
 from app.models.job import Job, MetaCategory, MetaSkill
@@ -167,7 +167,7 @@ class SaveSearchRequest(BaseModel):
     filters: Dict[str, Any] = Field(default_factory=dict)
 
 @router.get("/api/candidate/saved-searches", summary="Lấy danh sách tìm kiếm đã lưu của ứng viên")
-def list_saved_searches(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_saved_searches(db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 
@@ -195,7 +195,7 @@ def list_saved_searches(db: Session = Depends(get_db), current_user = Depends(ge
     return items
 
 @router.post("/api/candidate/saved-searches", summary="Lưu bộ lọc tìm kiếm hiện tại")
-def create_saved_search(data: SaveSearchRequest, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_saved_search(data: SaveSearchRequest, db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
 
@@ -214,7 +214,7 @@ def create_saved_search(data: SaveSearchRequest, db: Session = Depends(get_db), 
     return {"id": row.id, "message": "Đã lưu tìm kiếm thành công!"}
 
 @router.delete("/api/candidate/saved-searches/{id}", summary="Xoá tìm kiếm đã lưu")
-def delete_saved_search(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def delete_saved_search(id: int, db: Session = Depends(get_db), current_user = Depends(role_required("candidate"))):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
     row = db.scalar(select(SavedSearch).where(SavedSearch.id == id, SavedSearch.user_id == current_user.id))

@@ -3,7 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import auth_rate_limiter
-from app.core.security import create_access_token, get_current_user, hash_password, verify_password
+from app.core.security import (
+    ALL_AUTHENTICATED_ROLES,
+    create_access_token,
+    hash_password,
+    role_required,
+    verify_password,
+)
 from app.crud import company as company_crud
 from app.crud import user as user_crud
 from app.db.session import get_db
@@ -142,7 +148,7 @@ def reset_password(
     response_model=UserOut,
     summary="Lấy thông tin user đang đăng nhập",
 )
-def me(current_user=Depends(get_current_user)):
+def me(current_user=Depends(role_required(*ALL_AUTHENTICATED_ROLES))):
     """Trả về thông tin user đang đăng nhập dựa trên JWT.
 
     Cần header: `Authorization: Bearer <access_token>`
@@ -152,9 +158,14 @@ def me(current_user=Depends(get_current_user)):
 
 @router.post(
     "/logout",
-    summary="Đăng xuất tài khoản",
+    summary="Đăng xuất tài khoản và thu hồi JWT hiện tại",
 )
-def logout():
-    """Đăng xuất người dùng phía client."""
+def logout(
+    current_user=Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Tăng token_version để vô hiệu hoá mọi JWT đã cấp trước đó của người dùng."""
+    current_user.token_version = (getattr(current_user, "token_version", 1) or 1) + 1
+    db.commit()
     return {"message": "Đã đăng xuất thành công"}
 

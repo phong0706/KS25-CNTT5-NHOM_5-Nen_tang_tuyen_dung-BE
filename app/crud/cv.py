@@ -8,7 +8,7 @@ from app.schemas.candidate_schema import CvCreate
 
 def get_cvs_by_profile(db: Session, profile_id: int) -> list[Cv]:
     """Lấy danh sách CV của một profile."""
-    query = select(Cv).where(Cv.profile_id == profile_id).order_by(Cv.uploaded_at.desc())
+    query = select(Cv).where(Cv.profile_id == profile_id).order_by(Cv.created_at.desc())
     return list(db.scalars(query))
 
 

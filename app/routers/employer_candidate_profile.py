@@ -38,7 +38,7 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 def get_employer_candidate_profile(
     public_id: str,
     job_id: int | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
     db: Session = Depends(get_db),
 ):
     allowed, retry_after = profile_view_rate_limiter.check_and_record(current_user.id)
@@ -71,15 +71,18 @@ def get_employer_candidate_profile(
         if current_user.role != "admin" and job_obj.employer_id != current_user.id and comp_owner_id != current_user.id:
             raise HTTPException(status_code=404, detail="Tin tuyển dụng không thuộc quyền quản lý của bạn.")
 
-    emp_subq = select(Job.id).outerjoin(Company, Job.company_id == Company.id).where(
-        or_(Job.employer_id == current_user.id, Company.employer_id == current_user.id)
-    )
     if current_user.role == "admin":
         emp_apps = list(db.scalars(select(Application).where(Application.candidate_id == cand_user.id)).all())
     else:
-        emp_apps = list(db.scalars(select(Application).where(
-            Application.candidate_id == cand_user.id, Application.job_id.in_(emp_subq)
-        )).all())
+        from app.core.employer_scope import find_employer_company
+        own_comp = find_employer_company(db, current_user.id)
+        if not own_comp:
+            emp_apps = []
+        else:
+            emp_subq = select(Job.id).where(Job.company_id == own_comp.id, Job.deleted_at.is_(None))
+            emp_apps = list(db.scalars(select(Application).where(
+                Application.candidate_id == cand_user.id, Application.job_id.in_(emp_subq)
+            )).all())
 
     try:
         access = resolve_profile_access(current_user, profile, emp_apps)
@@ -132,7 +135,7 @@ def get_employer_candidate_profile(
 def get_employer_candidate_cv(
     public_id: str,
     application_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
     db: Session = Depends(get_db),
 ):
     if not ID_PATTERN.match(public_id or ""):

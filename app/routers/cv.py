@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import get_current_user
+from app.core.security import role_required
 from app.crud import cv as cv_crud
 from app.db.session import get_db
 from app.models.candidate import CandidateProfile, Cv
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/cvs", tags=["CV Management"])
 
 
 def get_current_profile_id(
-    current_user=Depends(get_current_user),
+    current_user=Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ) -> int:
     """Lấy candidate_profile_id của user hiện tại từ JWT token.
@@ -73,7 +73,11 @@ def get_profile_or_404(
     return profile
 
 
-def get_cv_or_404(cv_id: int, db: Session = Depends(get_db)) -> Cv:
+def get_cv_or_404(
+    cv_id: int,
+    _profile_id: int = Depends(get_current_profile_id),
+    db: Session = Depends(get_db),
+) -> Cv:
     """Lấy CV hoặc trả 404."""
     cv = cv_crud.get_cv_by_id(db, cv_id)
     if not cv:

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, get_optional_user
+from app.core.security import get_optional_user, role_required
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.interview import (
@@ -46,10 +46,10 @@ def list_questions(
     count_sql = f"SELECT COUNT(*) FROM interview_questions iq WHERE {where_sql}"
     total = db.execute(text(count_sql), params).scalar() or 0
 
-    # 2. Đếm số câu hỏi đã luyện theo bộ lọc của người dùng
+    # 2. Đếm số câu hỏi đã luyện theo bộ lọc (chỉ áp dụng cho candidate)
     practiced_count = 0
     practiced_ids = set()
-    if user and user.id:
+    if user and user.id and user.role == "candidate":
         p_stats_sql = f"""
             SELECT COUNT(DISTINCT ip.question_id)
             FROM interview_practice ip
@@ -124,7 +124,7 @@ def get_random_question(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy câu hỏi phù hợp.")
 
     is_practiced = False
-    if user and user.id:
+    if user and user.id and user.role == "candidate":
         p_row = db.execute(
             text("SELECT 1 FROM interview_practice WHERE candidate_id = :uid AND question_id = :qid"),
             {"uid": user.id, "qid": row.id}
@@ -144,7 +144,7 @@ def get_random_question(
 def toggle_practice(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     q_row = db.execute(
         text("SELECT id FROM interview_questions WHERE id = :qid AND is_published = 1"),

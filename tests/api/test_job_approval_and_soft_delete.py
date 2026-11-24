@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.application import Application
@@ -36,7 +36,7 @@ def _unique_str():
 def _create_user(db, role="employer"):
     u = User(
         email=f"{role}_{_unique_str()}@example.com",
-        password="hashed_password",
+        password=hash_password("TestPass123!"),
         full_name=f"User {role.capitalize()}",
         role=role,
         is_active=True,

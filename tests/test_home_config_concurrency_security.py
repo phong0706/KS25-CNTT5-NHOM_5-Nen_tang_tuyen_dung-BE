@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.models.user import User
 
@@ -58,7 +58,7 @@ def test_locked_admin_rejected_immediately():
         # Tạo hoặc lấy user bị khóa
         locked = db.query(User).filter(User.is_active == False).first()
         if not locked:
-            locked = User(email="locked_adm@test.com", password="hash", role="admin", full_name="Admin Bị Khóa", is_active=False)
+            locked = User(email="locked_adm@test.com", password=hash_password("TestPass123!"), role="admin", full_name="Admin Bị Khóa", is_active=False)
             db.add(locked)
             db.commit()
             db.refresh(locked)
