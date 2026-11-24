@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, Response, U
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from app.core.security import get_current_user
+from app.core.security import get_current_user, role_required
 from app.db.session import get_db
 from app.models.application import Application, CV
 from app.models.audit_log import AuditLog
@@ -126,7 +126,7 @@ def set_default_candidate_cv(cv_id: int, current_user: User = Depends(require_ca
 
 
 @router.get("/candidate/cvs/{cv_id}/file", summary="Xem / tải file CV có kiểm tra quyền sở hữu")
-def get_candidate_cv_file(cv_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_candidate_cv_file(cv_id: int, current_user: User = Depends(role_required("candidate", "admin", "operator")), db: Session = Depends(get_db)):
     cv = db.scalar(select(CV).where(CV.id == cv_id))
     if not cv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy CV.")

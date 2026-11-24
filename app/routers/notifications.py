@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user
+from app.core.security import ALL_AUTHENTICATED_ROLES, role_required
 from app.db.session import get_db
 from app.models.notification import Notification
 from app.models.user import User
@@ -43,7 +43,7 @@ def list_notifications(
     page: int | None = Query(None, ge=1),
     page_size: int | None = Query(None, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     actual_limit = page_size or limit
     base = select(Notification).where(Notification.user_id == current_user.id)
@@ -104,7 +104,7 @@ def list_notifications(
 @router.get("/unread-count", response_model=UnreadCountOut, summary="Số thông báo chưa đọc")
 def get_unread_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """FE gọi endpoint này để hiển thị badge chuông thông báo."""
     return UnreadCountOut(unread_count=count_unread(db, current_user.id))
@@ -115,7 +115,7 @@ def get_unread_count(
 def mark_notifications_read(
     body: MarkReadRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Đánh dấu đã đọc cho danh sách id thông báo thuộc user hiện tại."""
     updated = mark_as_read(db, current_user.id, body.notification_ids)
@@ -130,7 +130,7 @@ def mark_notifications_read(
 @router.post("/read-all", response_model=MarkReadResultOut, summary="Đánh dấu đã đọc toàn bộ")
 def mark_all_notifications_read(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Đánh dấu đã đọc TẤT CẢ thông báo của người đang đăng nhập."""
     updated = mark_all_as_read(db, current_user.id)
@@ -146,7 +146,7 @@ def mark_all_notifications_read(
 def mark_one_notification_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Dùng khi người dùng bấm vào 1 thông báo trên danh sách.
     Chỉ áp dụng cho thông báo của chính user, người khác trả 404.
@@ -178,7 +178,7 @@ def mark_one_notification_read(
 @router.delete("", status_code=status.HTTP_200_OK, summary="Xoa toan bo thong bao cua toi")
 def delete_notifications(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Xoa toan bo thong bao cua nguoi dang dang nhap."""
     deleted = delete_all_notifications(db, current_user.id)

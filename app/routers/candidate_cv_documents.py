@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user
+from app.core.security import role_required
 from app.db.session import get_db
 from app.models.cv_document import CVDocument
 from app.models.user import User
@@ -20,15 +20,10 @@ router = APIRouter(prefix="/candidate/cv-documents", tags=["Candidate CV Documen
 
 def _get_user_cv_or_fail(cv_id: int, user: User, db: Session) -> CVDocument:
     cv = db.scalar(select(CVDocument).where(CVDocument.id == cv_id))
-    if not cv:
+    if not cv or cv.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy tài liệu CV",
-        )
-    if cv.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bạn không có quyền thao tác trên tài liệu này",
         )
     return cv
 
@@ -36,7 +31,7 @@ def _get_user_cv_or_fail(cv_id: int, user: User, db: Session) -> CVDocument:
 @router.get("", response_model=list[CVDocumentListItem], summary="Danh sách CV đã tạo của ứng viên")
 def list_cv_documents(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -52,7 +47,7 @@ def list_cv_documents(
 def create_cv_document(
     data: CVDocumentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -73,7 +68,7 @@ def create_cv_document(
 def get_cv_document(
     cv_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -85,7 +80,7 @@ def update_cv_document(
     cv_id: int,
     data: CVDocumentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -113,7 +108,7 @@ def rename_cv_document(
     cv_id: int,
     data: CVDocumentRename,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -128,7 +123,7 @@ def rename_cv_document(
 def duplicate_cv_document(
     cv_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
@@ -150,7 +145,7 @@ def duplicate_cv_document(
 def delete_cv_document(
     cv_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
 ):
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")

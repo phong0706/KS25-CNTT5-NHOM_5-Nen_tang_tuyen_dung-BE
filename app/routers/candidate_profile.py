@@ -555,21 +555,19 @@ def delete_candidate_avatar(
 
 
 def _check_profile_ownership(profile_id: int, current_user: User, db: Session):
-    """Kiểm tra quyền sở hữu hồ sơ. Raise 404/403 nếu không hợp lệ."""
+    """Kiểm tra quyền sở hữu hồ sơ. Trả 404 nếu không tồn tại hoặc không thuộc sở hữu."""
     profile = profile_crud.get_profile_by_id(db, profile_id)
-    if not profile:
+    if not profile or not is_owner_or_admin(profile.user_id, current_user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy hồ sơ",
         )
-
-    require_owner(profile.user_id, current_user)
     return profile
 
 
 @router.get("/profiles/me", response_model=CandidateProfileDetailOut, summary="Xem hồ sơ của mình")
 def get_my_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Lấy hồ sơ của user đang đăng nhập (kèm skills, experiences, educations, cvs)."""
@@ -603,8 +601,8 @@ def get_profile(
     if not profile.is_public:
         if current_user is None or not is_owner_or_admin(profile.user_id, current_user):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Hồ sơ này ở chế độ riêng tư",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy hồ sơ",
             )
 
     return profile
@@ -618,7 +616,7 @@ def get_profile(
 )
 def create_profile(
     data: CandidateProfileCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Tạo hồ sơ ứng viên mới.
@@ -649,7 +647,7 @@ def create_profile(
 def update_profile(
     profile_id: int,
     data: CandidateProfileUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Cập nhật thông tin hồ sơ. Chỉ chủ hồ sơ hoặc admin mới được phép sửa."""
@@ -667,7 +665,7 @@ def update_profile(
 def add_skill(
     profile_id: int,
     data: CandidateSkillCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Thêm kỹ năng cho hồ sơ. Chỉ chủ hồ sơ mới được phép thêm."""
@@ -685,7 +683,7 @@ def update_skill(
     profile_id: int,
     skill_id: int,
     data: CandidateSkillUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Cập nhật kỹ năng. Chỉ chủ hồ sơ mới được phép sửa."""
@@ -710,7 +708,7 @@ def update_skill(
 def delete_skill(
     profile_id: int,
     skill_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Xóa kỹ năng. Chỉ chủ hồ sơ mới được phép xóa."""
@@ -736,7 +734,7 @@ def delete_skill(
 def add_experience(
     profile_id: int,
     data: ExperienceCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Thêm kinh nghiệm làm việc. Chỉ chủ hồ sơ mới được phép thêm."""
@@ -754,7 +752,7 @@ def update_experience(
     profile_id: int,
     exp_id: int,
     data: ExperienceUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Cập nhật kinh nghiệm. Chỉ chủ hồ sơ mới được phép sửa."""
@@ -779,7 +777,7 @@ def update_experience(
 def delete_experience(
     profile_id: int,
     exp_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Xóa kinh nghiệm. Chỉ chủ hồ sơ mới được phép xóa."""
@@ -805,7 +803,7 @@ def delete_experience(
 def add_education(
     profile_id: int,
     data: EducationCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Thêm học vấn. Chỉ chủ hồ sơ mới được phép thêm."""
@@ -823,7 +821,7 @@ def update_education(
     profile_id: int,
     edu_id: int,
     data: EducationUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Cập nhật học vấn. Chỉ chủ hồ sơ mới được phép sửa."""
@@ -848,7 +846,7 @@ def update_education(
 def delete_education(
     profile_id: int,
     edu_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("candidate")),
     db: Session = Depends(get_db),
 ):
     """Xóa học vấn. Chỉ chủ hồ sơ mới được phép xóa."""

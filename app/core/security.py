@@ -146,8 +146,11 @@ def get_optional_user(
     return user
 
 
+ALL_AUTHENTICATED_ROLES = ("candidate", "employer", "recruiter", "admin", "operator")
+
+
 def role_required(*roles: str) -> Callable:
-    """Factory tạo dependency kiểm tra role."""
+    """Factory tạo dependency kiểm tra role, lưu danh sách role vào _required_roles để audit."""
     def _check(current_user=Depends(get_current_user)):
         if current_user.role not in roles:
             raise HTTPException(
@@ -156,4 +159,5 @@ def role_required(*roles: str) -> Callable:
             )
         return current_user
 
+    _check._required_roles = tuple(roles)
     return _check

@@ -10,6 +10,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import role_required
 from app.crud import catalog as catalog_crud
 from app.db.session import get_db
 from app.schemas.catalog_schema import CatalogCreate, CatalogUpdate, CatalogResponse
@@ -44,7 +45,7 @@ def get_skill(skill=Depends(get_skill_or_404)):
 
 
 @router.post("", response_model=CatalogResponse, status_code=status.HTTP_201_CREATED)
-def create_skill(data: CatalogCreate, db: Session = Depends(get_db)):
+def create_skill(data: CatalogCreate, db: Session = Depends(get_db), _admin=Depends(role_required("admin"))):
     """Tạo kỹ năng mới. Tên phải duy nhất."""
     try:
         return catalog_crud.create_skill(db, data)
@@ -55,8 +56,9 @@ def create_skill(data: CatalogCreate, db: Session = Depends(get_db)):
 @router.put("/{skill_id}", response_model=CatalogResponse)
 def update_skill(
     data: CatalogUpdate,
+    _admin=Depends(role_required("admin")),
     skill=Depends(get_skill_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Cập nhật kỹ năng. Tên mới không được trùng với kỹ năng khác."""
     try:
@@ -67,8 +69,9 @@ def update_skill(
 
 @router.delete("/{skill_id}", response_model=CatalogResponse)
 def delete_skill(
+    _admin=Depends(role_required("admin")),
     skill=Depends(get_skill_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Ẩn kỹ năng (soft delete: đổi status='inactive').

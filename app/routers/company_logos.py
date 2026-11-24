@@ -116,10 +116,8 @@ def serve_original_logo(
 @router.post("/api/company/me/logo/preview", summary="Xem trước logo chuẩn hóa mà không lưu")
 async def preview_logo(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
 ):
-    if current_user.role not in ("employer", "recruiter", "admin", "operator"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Ứng viên hoặc người dùng không có quyền tải lên logo công ty.")
     content = await file.read()
     if not content:
         raise HTTPException(422, "Tệp ảnh rỗng hoặc không có dữ liệu.")
@@ -158,8 +156,13 @@ def list_home_companies(db: Session = Depends(get_db)):
 def list_company_logos(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
 ):
+    comp = db.query(Company).filter_by(id=company_id).first()
+    if not comp:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty.")
+    if current_user.role in ("employer", "recruiter") and comp.owner_id != current_user.id and comp.employer_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty.")
     logos = db.query(CompanyLogo).filter_by(company_id=company_id).order_by(CompanyLogo.version.desc(), CompanyLogo.id.desc()).all()
     return [_serialize_logo(l) for l in logos]
 
@@ -169,16 +172,14 @@ async def upload_logo(
     company_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
 ):
-    if current_user.role not in ("employer", "recruiter", "admin", "operator"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Ứng viên hoặc người dùng không có quyền tải lên logo công ty.")
     comp = db.query(Company).filter_by(id=company_id).first()
     if not comp:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty.")
     if current_user.role in ("employer", "recruiter"):
         if comp.owner_id != current_user.id and comp.employer_id != current_user.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền quản lý công ty này.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty.")
 
     content = await file.read()
     new_logo = upload_company_logo(db, company_id, content, current_user.id)
@@ -214,14 +215,14 @@ def reject_logo(
 def remove_logo(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
 ):
     comp = db.query(Company).filter_by(id=company_id).first()
     if not comp:
         raise HTTPException(404, "Không tìm thấy công ty.")
     if current_user.role not in ("admin", "operator"):
         if comp.owner_id != current_user.id and comp.employer_id != current_user.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền quản lý công ty này.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty.")
     comp = remove_company_logo(
         db, company_id, current_user.id, current_user.full_name or current_user.email, current_user.role
     )

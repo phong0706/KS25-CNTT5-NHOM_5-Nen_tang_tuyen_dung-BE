@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user
+from app.core.security import get_current_user, role_required
 from app.db.session import get_db
 from app.models.company import Company, CompanyStatus
 from app.models.company_verification import CompanyVerification
@@ -73,7 +73,7 @@ def get_my_verification_criteria(
 @router.get("/companies/{company_id}/verification-criteria", summary="Xem tiêu chí xác thực theo company_id (chỉ chủ sở hữu hoặc admin)")
 def get_company_verification_criteria(
     company_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
     db: Session = Depends(get_db),
 ):
     if current_user.role not in ("employer", "recruiter", "admin", "operator"):

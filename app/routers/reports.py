@@ -10,7 +10,7 @@ Endpoint:
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, role_required
+from app.core.security import ALL_AUTHENTICATED_ROLES, role_required
 from app.db.session import get_db
 from app.models.job import Job
 from app.models.report import Report, ReportStatus
@@ -40,7 +40,7 @@ router = APIRouter(tags=["Reports"])
 def create_report(
     data: ReportCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Người dùng đã đăng nhập báo cáo 1 tin tuyển dụng vi phạm (body: post_id, reason)."""
     from app.crud.report import create_report as _create_report
@@ -62,7 +62,7 @@ def list_my_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES)),
 ):
     """Lịch sử các báo cáo mà tôi đã gửi."""
     from app.crud.report import list_my_reports as _list_my_reports

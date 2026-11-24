@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from app.core.config import settings
-from app.core.security import get_current_user
+from app.core.security import ALL_AUTHENTICATED_ROLES, role_required
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.realtime.manager import HEARTBEAT_INTERVAL, HEARTBEAT_TIMEOUT, manager
@@ -38,7 +38,7 @@ def is_allowed_origin(origin: str | None) -> bool:
 
 
 @router.post("/api/ws/ticket", summary="Cấp vé kết nối WebSocket dùng 1 lần (TTL 30s)")
-def create_websocket_ticket(current_user: User = Depends(get_current_user)):
+def create_websocket_ticket(current_user: User = Depends(role_required(*ALL_AUTHENTICATED_ROLES))):
     """Cấp vé 1 lần. Chặn nếu chạy multi-worker không Redis hoặc vượt rate limit."""
     if manager.is_multi_worker_without_redis():
         return {"enabled": False, "ticket": None, "message": "Multi-worker mode without Redis: WebSocket disabled"}

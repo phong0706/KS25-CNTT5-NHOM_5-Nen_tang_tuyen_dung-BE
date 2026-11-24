@@ -38,7 +38,7 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 def get_employer_candidate_profile(
     public_id: str,
     job_id: int | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
     db: Session = Depends(get_db),
 ):
     allowed, retry_after = profile_view_rate_limiter.check_and_record(current_user.id)
@@ -135,7 +135,7 @@ def get_employer_candidate_profile(
 def get_employer_candidate_cv(
     public_id: str,
     application_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin", "operator")),
     db: Session = Depends(get_db),
 ):
     if not ID_PATTERN.match(public_id or ""):

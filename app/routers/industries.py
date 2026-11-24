@@ -10,6 +10,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import role_required
 from app.crud import catalog as catalog_crud
 from app.db.session import get_db
 from app.schemas.catalog_schema import CatalogCreate, CatalogUpdate, CatalogResponse
@@ -44,7 +45,7 @@ def get_industry(industry=Depends(get_industry_or_404)):
 
 
 @router.post("", response_model=CatalogResponse, status_code=status.HTTP_201_CREATED)
-def create_industry(data: CatalogCreate, db: Session = Depends(get_db)):
+def create_industry(data: CatalogCreate, db: Session = Depends(get_db), _admin=Depends(role_required("admin"))):
     """Tạo ngành nghề mới. Tên phải duy nhất."""
     try:
         return catalog_crud.create_industry(db, data)
@@ -55,8 +56,9 @@ def create_industry(data: CatalogCreate, db: Session = Depends(get_db)):
 @router.put("/{industry_id}", response_model=CatalogResponse)
 def update_industry(
     data: CatalogUpdate,
+    _admin=Depends(role_required("admin")),
     industry=Depends(get_industry_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Cập nhật ngành nghề. Tên mới không được trùng với ngành khác."""
     try:
@@ -67,8 +69,9 @@ def update_industry(
 
 @router.delete("/{industry_id}", response_model=CatalogResponse)
 def delete_industry(
+    _admin=Depends(role_required("admin")),
     industry=Depends(get_industry_or_404),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Ẩn ngành nghề (soft delete: đổi status='inactive').

@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.security import get_current_user
+from app.core.security import get_current_user, role_required
 from app.crud import company as company_crud
 from app.db.session import get_db
 from app.models.company import Company, CompanyStatus
@@ -164,14 +164,12 @@ def remove_my_company_logo(company=Depends(_get_my_company), db: Session = Depen
 def upload_company_logo_by_id(
     company_id: int,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(role_required("employer", "recruiter", "admin")),
     db: Session = Depends(get_db),
 ):
     comp = db.get(Company, company_id)
-    if comp is None:
+    if comp is None or (current_user.role != "admin" and comp.employer_id != current_user.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy công ty")
-    if current_user.role != "admin" and comp.employer_id != current_user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền sửa logo của công ty này")
     logo_url = validate_and_save_company_logo(file, comp.id)
     return company_crud.update_company_logo(db, comp, logo_url, current_user.id)
 

@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -84,19 +84,19 @@ def get_saved_jobs(db: Session, candidate_profile_id: int) -> list[dict]:
             Industry.name.label("industry_name"),
             Location.id.label("location_id"),
             Location.name.label("location_name"),
-            Job.job_type,
+            Job.work_type.label("job_type"),
             Job.experience_level,
             Job.salary_min,
             Job.salary_max,
-            Job.is_negotiable,
-            Job.currency,
+            Job.is_salary_negotiable.label("is_negotiable"),
+            literal("VND").label("currency"),
             Job.deadline,
             SavedJob.saved_at,
         )
         .join(Job, SavedJob.job_id == Job.id)
         .join(Company, Job.company_id == Company.id)
-        .join(Industry, Job.industry_id == Industry.id)
-        .join(Location, Job.location_id == Location.id)
+        .outerjoin(Industry, Job.category_id == Industry.id)
+        .outerjoin(Location, Job.location_id == Location.id)
         .where(SavedJob.candidate_profile_id == candidate_profile_id)
         .order_by(SavedJob.saved_at.desc(), SavedJob.id.desc())
     )
