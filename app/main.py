@@ -46,6 +46,7 @@ from app.routers import (
     employer_candidate_profile,
     employer_interviews,
     employer_job_moderation,
+    employer_dashboard,
     employer_jobs,
     employer_verification,
     health,
@@ -157,6 +158,7 @@ app.include_router(industries.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
 app.include_router(employer_job_moderation.router, prefix="/api")
+app.include_router(employer_dashboard.router, prefix="/api")
 app.include_router(employer_jobs.router, prefix="/api")
 app.include_router(employer_applications.router, prefix="/api")
 app.include_router(employer_candidate_profile.router, prefix="/api")

@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status as http_sta
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.core.security import role_required
+from app.core.employer_scope import EmployerScope, get_employer_scope
 from app.db.session import get_db
 from app.models.company import Company, CompanyStatus
 from app.models.job import Job, JobApplication
 from app.models.user import User
+from app.services.job_filter_service import open_jobs_clause
 from app.schemas.job import (
     AllowedActionOut,
     BulkJobActionIn,
@@ -101,12 +102,12 @@ def list_employer_jobs(
     sort: str = Query("newest", description="newest|most_applicants|expiring_soon"),
     page: int = Query(1, ge=1),
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
-    # 1. Đếm số lượng theo từng trạng thái bằng GROUP BY
+    # 1. Đếm số lượng theo từng trạng thái bằng GROUP BY theo đúng company_id
     count_rows = db.execute(
         select(Job.status, func.count(Job.id))
-        .where(Job.employer_id == current_user.id, Job.deleted_at.is_(None))
+        .where(Job.company_id == scope.company_id, Job.deleted_at.is_(None))
         .group_by(Job.status)
     ).all()
 
@@ -122,6 +123,15 @@ def list_employer_jobs(
     for st, cnt in count_rows:
         counts[st] = int(cnt)
         counts["all"] += int(cnt)
+    # Chuẩn hóa số lượng 'published' (đang tuyển) bằng open_jobs_clause() dùng chung toàn hệ thống
+    counts["published"] = int(
+        db.scalar(
+            select(func.count(Job.id))
+            .join(Company, Job.company_id == Company.id)
+            .where(*open_jobs_clause(company_id=scope.company_id))
+        )
+        or 0
+    )
 
     tabs = [
         JobTabOut(key=key, label=label, count=counts.get(key, 0))
@@ -146,17 +156,20 @@ def list_employer_jobs(
     new_applicants_col = func.coalesce(app_stats_subq.c.new_applicants_count, 0)
 
     # 3. Bộ lọc truy vấn danh sách
-    filters = [Job.employer_id == current_user.id, Job.deleted_at.is_(None)]
     normalized_status = status.strip().lower()
-    if normalized_status and normalized_status != "all":
-        filters.append(Job.status == normalized_status)
+    if normalized_status == "published":
+        filters = [*open_jobs_clause(company_id=scope.company_id)]
+    else:
+        filters = [Job.company_id == scope.company_id, Job.deleted_at.is_(None)]
+        if normalized_status and normalized_status != "all":
+            filters.append(Job.status == normalized_status)
 
     keyword = q.strip()
     if keyword:
         filters.append(Job.title.ilike(f"%{keyword}%"))
 
     total_items = int(
-        db.scalar(select(func.count(Job.id)).where(*filters)) or 0
+        db.scalar(select(func.count(Job.id)).join(Company, Job.company_id == Company.id).where(*filters)) or 0
     )
     total_pages = max(1, math.ceil(total_items / PAGE_SIZE))
     safe_page = min(page, total_pages)
@@ -181,6 +194,7 @@ def list_employer_jobs(
             new_applicants_col.label("new_applicants_count"),
         )
         .outerjoin(app_stats_subq, Job.id == app_stats_subq.c.job_id)
+        .join(Company, Job.company_id == Company.id)
         .where(*filters)
         .order_by(*order_clauses)
         .offset(offset)
@@ -241,17 +255,12 @@ TRANSITIONS: dict[str, tuple[set[str], str, str | None, str]] = {
 }
 
 
-def _get_owned_job(db: Session, job_id: int, employer_id: int) -> Job:
+def _get_owned_job(db: Session, job_id: int, company_id: int) -> Job:
     job = db.get(Job, job_id)
-    if not job or job.deleted_at is not None:
+    if not job or job.deleted_at is not None or job.company_id != company_id:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy tin tuyển dụng",
-        )
-    if job.employer_id != employer_id:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail="Bạn không có quyền thao tác trên tin tuyển dụng này",
         )
     return job
 
@@ -261,7 +270,7 @@ def patch_job_status(
     job_id: int,
     body: JobStatusPatchIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     action = body.action.strip().lower()
     if action not in TRANSITIONS:
@@ -270,22 +279,16 @@ def patch_job_status(
             detail="Hành động chuyển trạng thái không hợp lệ",
         )
 
-    job = _get_owned_job(db, job_id, current_user.id)
+    job = _get_owned_job(db, job_id, scope.company_id)
     allowed_from, next_status, undo_action, message = TRANSITIONS[action]
     if action in ("submit", "reopen"):
-        enforce_company_job_rule(db, current_user.id, next_status, is_creating=False, existing_job=job)
+        enforce_company_job_rule(db, scope.user_id, next_status, is_creating=False, existing_job=job)
     if job.status not in allowed_from:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail=f"Không thể thực hiện thao tác '{action}' khi tin đang ở trạng thái '{job.status}'",
         )
-    if next_status in ("pending", "published"):
-        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-        if company is None or company.status != CompanyStatus.VERIFIED:
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="Công ty chưa được xác minh, chỉ được lưu tin nháp",
-            )
+    company = scope.company
 
     # Chỉ trả undo_action nếu tin trước đó đang hiển thị (published) hoặc đóng từ published
     effective_undo = undo_action if (action in ("hide", "close") and job.status == "published") else None
@@ -299,21 +302,21 @@ def patch_job_status(
     st_label, st_tone = STATUS_META.get(next_status, (next_status, "neutral"))
     notify_job_status_changed(
         db,
-        employer_id=current_user.id,
+        employer_id=scope.user_id,
         job_id=job.id,
         job_title=job.title,
         status=next_status,
         status_label=st_label,
-        actor_id=current_user.id,
+        actor_id=scope.user_id,
     )
-    if first_publication and job.company_id is not None:
+    if first_publication:
         notify_company_followers_about_job(
             db,
-            company_id=job.company_id,
-            company_name=company.name if company else "Công ty",
+            company_id=scope.company_id,
+            company_name=company.name,
             job_id=job.id,
             job_title=job.title,
-            actor_id=current_user.id,
+            actor_id=scope.user_id,
         )
 
     db.commit()
@@ -334,14 +337,13 @@ def patch_job_status(
 def duplicate_job(
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
-    src = _get_owned_job(db, job_id, current_user.id)
-    company = db.scalar(select(Company).where(Company.employer_id == current_user.id).order_by(Company.id.asc()))
+    src = _get_owned_job(db, job_id, scope.company_id)
     copy_title = f"{src.title} (Bản sao)"[:255]
     new_job = Job(
-        employer_id=current_user.id,
-        company_id=company.id if company else src.company_id,
+        employer_id=scope.user_id,
+        company_id=scope.company_id,
         title=copy_title,
         level=src.level,
         work_type=src.work_type,
@@ -374,9 +376,9 @@ def duplicate_job(
 def delete_job(
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
-    job = _get_owned_job(db, job_id, current_user.id)
+    job = _get_owned_job(db, job_id, scope.company_id)
     job.deleted_at = datetime.now(timezone.utc)
     job.version += 1
     db.commit()
@@ -431,9 +433,9 @@ def _to_job_detail(db: Session, job: Job) -> JobDetailOut:
 def get_employer_job_detail(
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
-    job = _get_owned_job(db, job_id, current_user.id)
+    job = _get_owned_job(db, job_id, scope.company_id)
     return _to_job_detail(db, job)
 
 
@@ -441,28 +443,16 @@ def get_employer_job_detail(
 def create_employer_job(
     body: JobPayloadIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     _validate_job_payload(body)
-    company = enforce_company_job_rule(db, current_user.id, body.status, is_creating=True)
-    if company is None:
-        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-    company_verified = (
-        company is not None
-        and company.status == CompanyStatus.VERIFIED
-        and company.verification_status == "da_xac_minh"
-    )
-    if not company_verified and body.status != "draft":
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
-        )
+    company = enforce_company_job_rule(db, scope.user_id, body.status, is_creating=True) or scope.company
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
     job = Job(
-        employer_id=current_user.id,
-        company_id=company.id if company else None,
+        employer_id=scope.user_id,
+        company_id=scope.company_id,
         title=body.title.strip(),
         level=body.level,
         work_type=body.work_type,
@@ -476,7 +466,7 @@ def create_employer_job(
         salary_max=None if body.is_salary_negotiable else body.salary_max,
         is_salary_negotiable=body.is_salary_negotiable,
         benefits=clean_benefits,
-        status=body.status if company_verified else "draft",
+        status=body.status,
     )
     db.add(job)
     sync_skills_from_job(db, clean_skills)
@@ -491,26 +481,17 @@ def update_employer_job(
     job_id: int,
     body: JobPayloadIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     _validate_job_payload(body)
-    job = _get_owned_job(db, job_id, current_user.id)
-    company = enforce_company_job_rule(
-        db, current_user.id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline
+    job = _get_owned_job(db, job_id, scope.company_id)
+    enforce_company_job_rule(
+        db, scope.user_id, body.status, is_creating=False, existing_job=job, new_deadline=body.deadline
     )
-    if company is None:
-        company = db.scalar(select(Company).where(Company.employer_id == current_user.id))
-    if (company is None or company.status != CompanyStatus.VERIFIED) and body.status != "draft":
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail={"code": "COMPANY_NOT_VERIFIED", "message": "Công ty chưa được xác minh nên chỉ có thể lưu nháp tin tuyển dụng."},
-        )
     clean_skills = list(dict.fromkeys([s.strip() for s in body.skills if s.strip()]))[:15]
     clean_benefits = [b.strip() for b in body.benefits if b.strip()]
 
-    if job.company_id is None and company is not None:
-        job.company_id = company.id
-
+    job.company_id = scope.company_id
     job.title = body.title.strip()
     job.level = body.level
     job.work_type = body.work_type
@@ -524,11 +505,7 @@ def update_employer_job(
     job.salary_max = None if body.is_salary_negotiable else body.salary_max
     job.is_salary_negotiable = body.is_salary_negotiable
     job.benefits = clean_benefits
-    # Cho phép nâng từ draft lên pending; nếu tin đang published/hidden/closed giữ trạng thái hiện tại trừ khi sửa draft
-    if (company is None or company.status != CompanyStatus.VERIFIED or company.verification_status != "da_xac_minh") and job.status != "reverify_pending":
-        job.status = "draft"
-        job.published_at = None
-    elif job.status == "draft" and body.status in ("draft", "pending"):
+    if job.status == "draft" and body.status in ("draft", "pending"):
         job.status = body.status
 
     sync_skills_from_job(db, clean_skills)
@@ -542,10 +519,10 @@ def update_employer_job(
 def bulk_employer_jobs_action(
     body: BulkJobActionIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     jobs = db.scalars(
-        select(Job).where(Job.employer_id == current_user.id, Job.id.in_(body.job_ids))
+        select(Job).where(Job.company_id == scope.company_id, Job.deleted_at.is_(None), Job.id.in_(body.job_ids))
     ).all()
 
     processed = 0

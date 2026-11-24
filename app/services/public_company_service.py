@@ -20,7 +20,7 @@ _SKILL_MAP_CACHE: tuple[float, dict[str, str]] | None = None
 
 def open_job_conds(company_id: int | None = None):
     today = date.today()
-    conds = [Job.status == "published", or_(Job.deadline.is_(None), Job.deadline >= today)]
+    conds = [Job.status.in_(["published", "open"]), Job.deleted_at.is_(None), or_(Job.deadline.is_(None), Job.deadline >= today)]
     if company_id is not None:
         conds.append(Job.company_id == company_id)
     return conds

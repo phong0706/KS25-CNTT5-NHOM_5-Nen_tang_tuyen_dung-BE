@@ -2,9 +2,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.security import role_required
+from app.core.employer_scope import EmployerScope, get_employer_scope
 from app.db.session import get_db
-from app.models.user import User
 from app.schemas.job_moderation import JobModerationActionIn, JobModerationOut
 from app.services.job_moderation_service import (
     submit_job_for_review_service,
@@ -19,14 +18,15 @@ def employer_submit_job(
     job_id: int,
     payload: JobModerationActionIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     """Nhà tuyển dụng gửi duyệt tin tuyển dụng (draft/rejected -> pending)."""
     return submit_job_for_review_service(
         db=db,
         job_id=job_id,
-        employer_id=current_user.id,
+        employer_id=scope.user_id,
         expected_version=payload.version,
+        company_id=scope.company_id,
     )
 
 
@@ -35,12 +35,13 @@ def employer_withdraw_job(
     job_id: int,
     payload: JobModerationActionIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required("employer")),
+    scope: EmployerScope = Depends(get_employer_scope),
 ):
     """Nhà tuyển dụng rút tin chờ duyệt về nháp (pending -> draft)."""
     return withdraw_job_to_draft_service(
         db=db,
         job_id=job_id,
-        employer_id=current_user.id,
+        employer_id=scope.user_id,
         expected_version=payload.version,
+        company_id=scope.company_id,
     )
