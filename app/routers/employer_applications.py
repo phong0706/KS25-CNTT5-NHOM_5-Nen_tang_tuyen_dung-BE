@@ -25,10 +25,11 @@ from app.models.user import User
 from app.schemas.application import AppTabOut, InterviewInfo, StatusHistoryItem
 from app.schemas.employer_application import (
     ApplicantCandidateOut, ApplicantJobOut, ApplicationNoteCreateIn,
-    ApplicationNoteOut, EmployerApplicationDetailOut,
-    EmployerApplicationItemOut, EmployerApplicationListOut,
-    EmployerInterviewScheduleIn, EmployerStatusUpdateIn,
+    ApplicationNoteOut, BulkRejectApplicationsIn, BulkRejectItemResult, BulkRejectOut,
+    EmployerApplicationDetailOut, EmployerApplicationItemOut, EmployerApplicationListOut,
+    EmployerInterviewScheduleIn, EmployerStatusUpdateIn, RejectApplicationIn,
 )
+from app.services.application_reject_service import reject_application_core, validate_rejection_reason
 from app.services.cv_service import get_cv_file_path
 from app.services.interview_service import check_interview_overlap
 from app.services.matching import compute_job_match
@@ -37,8 +38,8 @@ from app.services.notification import notify_application_status_changed, notify_
 router = APIRouter(prefix="/employer/applications", tags=["Employer Applications"])
 
 ALLOWED_TRANSITIONS = {
-    ApplicationStatus.SUBMITTED: (ApplicationStatus.REVIEWING,),
-    ApplicationStatus.REVIEWING: (ApplicationStatus.INTERVIEW,),
+    ApplicationStatus.SUBMITTED: (ApplicationStatus.REVIEWING, ApplicationStatus.REJECTED),
+    ApplicationStatus.REVIEWING: (ApplicationStatus.INTERVIEW, ApplicationStatus.REJECTED),
     ApplicationStatus.INTERVIEW: (ApplicationStatus.OFFERED, ApplicationStatus.REJECTED),
 }
 
@@ -395,6 +396,12 @@ def update_application_status(
     if target not in {status.value for status in ApplicationStatus}:
         raise HTTPException(status_code=422, detail="Trạng thái không hợp lệ.")
 
+    if target == ApplicationStatus.REJECTED:
+        reason = validate_rejection_reason(db, body.rejection_reason_slug or "")
+        res = reject_application_core(db, app, scope.user_id, reason, body.note)
+        db.commit()
+        return {"message": res["message"], "status": res["status"]}
+
     old_status = app.status
     new_status = _stored_status(target, old_status)
     sm = _smap(db)
@@ -504,3 +511,66 @@ def schedule_interview(
     )
     db.commit()
     return {"message": "Đã lên lịch hẹn phỏng vấn thành công!", "interview_id": iv.id, "scheduled_at": body.scheduled_at}
+
+
+@router.post("/bulk-reject", response_model=BulkRejectOut, summary="Từ chối hàng loạt hồ sơ")
+def bulk_reject_applications(
+    body: BulkRejectApplicationsIn,
+    scope: EmployerScope = Depends(get_employer_scope),
+    db: Session = Depends(get_db),
+):
+    reason = validate_rejection_reason(db, body.reason_code)
+    unique_ids = list(dict.fromkeys(body.ids))
+    apps = {
+        a.id: a
+        for a in db.scalars(
+            select(Application).where(
+                Application.id.in_(unique_ids),
+                Application.job_id.in_(_company_job_ids(scope.company_id)),
+            ).with_for_update()
+        ).all()
+    }
+    results: list[BulkRejectItemResult] = []
+    rejected_count = 0
+    skipped_count = 0
+    for app_id in unique_ids:
+        app = apps.get(app_id)
+        if not app:
+            skipped_count += 1
+            results.append(BulkRejectItemResult(id=app_id, status="skipped", detail="Không tìm thấy hồ sơ"))
+            continue
+        try:
+            res = reject_application_core(db, app, scope.user_id, reason, body.message)
+            if res.get("already_rejected"):
+                skipped_count += 1
+                results.append(BulkRejectItemResult(id=app_id, status="skipped", detail="Đã từ chối trước đó"))
+            else:
+                rejected_count += 1
+                results.append(BulkRejectItemResult(id=app_id, status="rejected", detail="Đã từ chối"))
+        except HTTPException as exc:
+            skipped_count += 1
+            results.append(BulkRejectItemResult(id=app_id, status="skipped", detail=str(exc.detail)))
+
+    db.commit()
+    return BulkRejectOut(
+        total=len(unique_ids),
+        rejected_count=rejected_count,
+        skipped_count=skipped_count,
+        results=results,
+    )
+
+
+@router.post("/{app_id}/reject", summary="Từ chối hồ sơ ứng viên")
+def reject_application(
+    app_id: int,
+    body: RejectApplicationIn,
+    scope: EmployerScope = Depends(get_employer_scope),
+    db: Session = Depends(get_db),
+):
+    reason = validate_rejection_reason(db, body.reason_code)
+    app = db.scalar(_company_application(app_id, scope.company_id).with_for_update())
+    if not app:
+        raise HTTPException(status_code=404, detail="Hồ sơ ứng tuyển không tồn tại.")
+    res = reject_application_core(db, app, scope.user_id, reason, body.message)
+    db.commit()
+    return res
