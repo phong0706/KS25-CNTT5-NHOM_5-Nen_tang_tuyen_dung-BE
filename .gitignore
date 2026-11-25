@@ -1,9 +1,13 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
 venv/
 env/
+*.log
+*.err
+srv.err
 
 # Cấu hình bí mật
 .env
@@ -11,3 +15,8 @@ env/
 # IDE
 .vscode/
 .idea/
+
+# File upload & kho lưu trữ riêng tư (CV, giấy phép kinh doanh)
+uploads/
+storage/
+

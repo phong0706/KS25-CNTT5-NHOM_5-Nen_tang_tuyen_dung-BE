@@ -9,11 +9,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import role_required
 from app.crud import item as item_crud
 from app.db.session import get_db
 from app.schemas.item import ItemCreate, ItemOut, ItemUpdate
 
-router = APIRouter(prefix="/items", tags=["Items"])
+router = APIRouter(
+    prefix="/items",
+    tags=["Items"],
+    dependencies=[Depends(role_required("admin"))],
+)
 
 
 def get_item_or_404(item_id: int, db: Session = Depends(get_db)):

@@ -1,0 +1,510 @@
+{
+  "3.1_job_moderation": {
+    "transition_matrix": {
+      "employer": {
+        "draft": [
+          "pending"
+        ],
+        "pending": [
+          "draft"
+        ],
+        "rejected": [
+          "pending"
+        ],
+        "published": [
+          "closed"
+        ],
+        "open": [
+          "closed"
+        ],
+        "closed": [
+          "pending"
+        ]
+      },
+      "admin": {
+        "pending": [
+          "published",
+          "open",
+          "rejected",
+          "deleted"
+        ],
+        "published": [
+          "closed",
+          "deleted"
+        ],
+        "open": [
+          "closed",
+          "deleted"
+        ]
+      }
+    },
+    "unverified_company_submit_status": 422,
+    "unverified_company_submit_response": {
+      "detail": [
+        {
+          "type": "missing",
+          "loc": [
+            "body"
+          ],
+          "msg": "Field required",
+          "input": null
+        }
+      ]
+    },
+    "blocked_at_backend": true,
+    "is_job_public_rules_check": [
+      {
+        "status": "published",
+        "deadline": "2026-11-26",
+        "comp_verif": true,
+        "deleted": false,
+        "expect_public": true,
+        "actual_public": true,
+        "passed": true
+      },
+      {
+        "status": "published",
+        "deadline": "2026-11-20",
+        "comp_verif": true,
+        "deleted": false,
+        "expect_public": false,
+        "actual_public": false,
+        "passed": true
+      },
+      {
+        "status": "published",
+        "deadline": "2026-11-26",
+        "comp_verif": false,
+        "deleted": false,
+        "expect_public": false,
+        "actual_public": false,
+        "passed": true
+      },
+      {
+        "status": "draft",
+        "deadline": "2026-11-26",
+        "comp_verif": true,
+        "deleted": false,
+        "expect_public": false,
+        "actual_public": false,
+        "passed": true
+      },
+      {
+        "status": "published",
+        "deadline": "2026-11-26",
+        "comp_verif": true,
+        "deleted": true,
+        "expect_public": false,
+        "actual_public": false,
+        "passed": true
+      }
+    ]
+  },
+  "3.2_company_verification": {
+    "verif_states": [
+      "chua_xac_minh",
+      "cho_duyet",
+      "da_xac_minh",
+      "tu_choi",
+      "thu_hoi"
+    ],
+    "admin_approve_endpoint_status": 404
+  },
+  "3.3_company_logo": {
+    "reject_no_reason_status": 404,
+    "reject_no_reason_blocked": false
+  },
+  "3.5_matching_logic": {
+    "ten_sample_calculations": [
+      {
+        "case": 1,
+        "candidate_skills": [
+          "Python",
+          "FastAPI",
+          "Docker"
+        ],
+        "job_skills": [
+          "Python",
+          "FastAPI",
+          "Docker"
+        ],
+        "total_score": 1.0,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 1.0,
+          "is_match": true,
+          "skill_score": 1.0,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Python",
+            "FastAPI",
+            "Docker"
+          ],
+          "missing_required": [],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 3/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470223"
+        }
+      },
+      {
+        "case": 2,
+        "candidate_skills": [
+          "React",
+          "TypeScript",
+          "TailwindCSS"
+        ],
+        "job_skills": [
+          "React",
+          "JavaScript",
+          "HTML/CSS"
+        ],
+        "total_score": 0.6,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.6,
+          "is_match": true,
+          "skill_score": 0.3333,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "React"
+          ],
+          "missing_required": [
+            "JavaScript",
+            "HTML/CSS"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 1/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470248"
+        }
+      },
+      {
+        "case": 3,
+        "candidate_skills": [
+          "Java",
+          "Spring Boot",
+          "MySQL"
+        ],
+        "job_skills": [
+          "Java",
+          "Spring Boot",
+          "MySQL"
+        ],
+        "total_score": 1.0,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 1.0,
+          "is_match": true,
+          "skill_score": 1.0,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Java",
+            "Spring Boot",
+            "MySQL"
+          ],
+          "missing_required": [],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 3/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470264"
+        }
+      },
+      {
+        "case": 4,
+        "candidate_skills": [
+          "Docker",
+          "Kubernetes",
+          "AWS"
+        ],
+        "job_skills": [
+          "Docker",
+          "Kubernetes",
+          "CI/CD"
+        ],
+        "total_score": 0.8,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.8,
+          "is_match": true,
+          "skill_score": 0.6667,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Docker",
+            "Kubernetes"
+          ],
+          "missing_required": [
+            "CI/CD"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 2/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470277"
+        }
+      },
+      {
+        "case": 5,
+        "candidate_skills": [
+          "Python",
+          "PyTorch",
+          "Pandas"
+        ],
+        "job_skills": [
+          "Python",
+          "Machine Learning",
+          "NLP"
+        ],
+        "total_score": 0.6,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.6,
+          "is_match": true,
+          "skill_score": 0.3333,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Python"
+          ],
+          "missing_required": [
+            "Machine Learning",
+            "NLP"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 1/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470288"
+        }
+      },
+      {
+        "case": 6,
+        "candidate_skills": [
+          "Flutter",
+          "Dart",
+          "Firebase"
+        ],
+        "job_skills": [
+          "Flutter",
+          "Dart",
+          "REST API"
+        ],
+        "total_score": 0.8,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.8,
+          "is_match": true,
+          "skill_score": 0.6667,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Flutter",
+            "Dart"
+          ],
+          "missing_required": [
+            "REST API"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 2/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470299"
+        }
+      },
+      {
+        "case": 7,
+        "candidate_skills": [
+          "Node.js",
+          "Express",
+          "MongoDB"
+        ],
+        "job_skills": [
+          "Node.js",
+          "TypeScript",
+          "PostgreSQL"
+        ],
+        "total_score": 0.6,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.6,
+          "is_match": true,
+          "skill_score": 0.3333,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Node.js"
+          ],
+          "missing_required": [
+            "TypeScript",
+            "PostgreSQL"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 1/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470309"
+        }
+      },
+      {
+        "case": 8,
+        "candidate_skills": [
+          "PHP",
+          "Laravel",
+          "MySQL"
+        ],
+        "job_skills": [
+          "PHP",
+          "Laravel",
+          "Vue.js"
+        ],
+        "total_score": 0.8,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.8,
+          "is_match": true,
+          "skill_score": 0.6667,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "PHP",
+            "Laravel"
+          ],
+          "missing_required": [
+            "Vue.js"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 2/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470319"
+        }
+      },
+      {
+        "case": 9,
+        "candidate_skills": [
+          "Golang",
+          "gRPC",
+          "Docker"
+        ],
+        "job_skills": [
+          "Golang",
+          "Kubernetes",
+          "Redis"
+        ],
+        "total_score": 0.6,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.6,
+          "is_match": true,
+          "skill_score": 0.3333,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Golang"
+          ],
+          "missing_required": [
+            "Kubernetes",
+            "Redis"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 1/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470334"
+        }
+      },
+      {
+        "case": 10,
+        "candidate_skills": [
+          "Selenium",
+          "Postman",
+          "SQL"
+        ],
+        "job_skills": [
+          "Selenium",
+          "Automation",
+          "Jira"
+        ],
+        "total_score": 0.6,
+        "in_range_0_1": true,
+        "breakdown": {
+          "total_score": 0.6,
+          "is_match": true,
+          "skill_score": 0.3333,
+          "level_score": 1.0,
+          "place_score": 1.0,
+          "salary_score": 1.0,
+          "matched_skills": [
+            "Selenium"
+          ],
+          "missing_required": [
+            "Automation",
+            "Jira"
+          ],
+          "labels": {
+            "level": "\u0110\u00fang c\u1ea5p b\u1eadc",
+            "place": "C\u00f9ng \u0111\u1ecba \u0111i\u1ec3m",
+            "salary": "M\u1ee9c l\u01b0\u01a1ng ph\u00f9 h\u1ee3p",
+            "summary": "Kh\u1edbp 1/3 k\u1ef9 n\u0103ng"
+          },
+          "formula_version": "v1.0",
+          "computed_at": "2026-11-21T17:34:39.470344"
+        }
+      }
+    ],
+    "all_scores_valid": true
+  },
+  "3.6_interviews": {
+    "schedule_past_date_status": 405,
+    "schedule_past_date_response": "{\"detail\":\"Method Not Allowed\"}"
+  },
+  "3.8_filter_counts": {
+    "api_total": 96,
+    "facets_total_jobs": null,
+    "facets_locations_count": 0,
+    "facets_levels_count": 0
+  }
+}

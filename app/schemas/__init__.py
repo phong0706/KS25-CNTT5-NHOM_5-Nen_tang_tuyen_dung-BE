@@ -1,0 +1,120 @@
+# Import các schema danh mục (Industry, Location, Skill)
+from app.schemas.catalog_schema import (
+    CatalogBase,
+    CatalogCreate,
+    CatalogUpdate,
+    CatalogResponse,
+)
+
+# Import các schema báo cáo vi phạm (Report)
+from app.schemas.report_schema import (
+    ReportCreate,
+    ReportUpdate,
+    ReportActionIn,
+    ReportResponse,
+    AdminReportPageOut,
+)
+
+# Import các schema ứng viên
+from app.schemas.candidate_schema import (
+    CandidateSkillCreate,
+    CandidateSkillUpdate,
+    CandidateSkillOut,
+    ExperienceCreate,
+    ExperienceUpdate,
+    ExperienceOut,
+    EducationCreate,
+    EducationUpdate,
+    EducationOut,
+    CvCreate,
+    CvOut,
+    CandidateProfileCreate,
+    CandidateProfileUpdate,
+    CandidateProfileOut,
+)
+
+# Import các schema tin tuyển dụng & lưu tin
+from app.schemas.job import (
+    JobCreate,
+    JobUpdate,
+    JobStatusUpdate,
+    JobOut,
+    JobMutationResponse,
+    JobSearchOut,
+    JobSearchPageOut,
+)
+from app.schemas.saved_job import (
+    SavedJobCreate,
+    SavedJobOut,
+    SavedJobDetailOut,
+)
+
+# Import các schema đơn ứng tuyển
+from app.schemas.application_schema import (
+    ApplicationCreate,
+    ApplicationUpdate,
+    ApplicationOut,
+)
+
+# Import các schema quản lý tài khoản người dùng (admin)
+from app.schemas.user import UserListOut, UserLockIn, UserOut
+
+# Import các schema lịch sử trạng thái đơn ứng tuyển
+from app.schemas.application_status_history_schema import (
+    ApplicationStatusHistoryCreate,
+    ApplicationStatusHistoryOut,
+)
+
+# Import các schema lịch phỏng vấn
+from app.schemas.interview_schema import (
+    InterviewCreate,
+    InterviewUpdate,
+    InterviewOut,
+)
+
+__all__ = [
+    "CatalogBase",
+    "CatalogCreate",
+    "CatalogUpdate",
+    "CatalogResponse",
+    "ReportCreate",
+    "ReportUpdate",
+    "ReportActionIn",
+    "ReportResponse",
+    "AdminReportPageOut",
+    "CandidateSkillCreate",
+    "CandidateSkillUpdate",
+    "CandidateSkillOut",
+    "ExperienceCreate",
+    "ExperienceUpdate",
+    "ExperienceOut",
+    "EducationCreate",
+    "EducationUpdate",
+    "EducationOut",
+    "CvCreate",
+    "CvOut",
+    "CandidateProfileCreate",
+    "CandidateProfileUpdate",
+    "CandidateProfileOut",
+    "JobCreate",
+    "JobUpdate",
+    "JobStatusUpdate",
+    "JobOut",
+    "JobMutationResponse",
+    "JobSearchOut",
+    "JobSearchPageOut",
+    "SavedJobCreate",
+    "SavedJobOut",
+    "SavedJobDetailOut",
+    "ApplicationCreate",
+    "ApplicationUpdate",
+    "ApplicationOut",
+    "ApplicationStatusHistoryCreate",
+    "ApplicationStatusHistoryOut",
+    "InterviewCreate",
+    "InterviewUpdate",
+    "InterviewOut",
+    "UserOut",
+    "UserListOut",
+    "UserLockIn",
+]

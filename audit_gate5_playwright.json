@@ -1,0 +1,278 @@
+{
+  "console_errors": [
+    {
+      "page": "frontend/index.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/companies.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/login.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/register.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/candidate/applications.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/candidate/matched-jobs.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": []
+    },
+    {
+      "page": "frontend/pages/employer/recruitment.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": [
+        "[Guard] Chưa đăng nhập. Điều hướng về trang login."
+      ]
+    },
+    {
+      "page": "frontend/pages/admin/dashboard.html",
+      "has_errors": false,
+      "error_count": 0,
+      "errors": [],
+      "warnings_sample": [
+        "[Guard] Chưa đăng nhập. Điều hướng về trang login.",
+        "[Guard] Chưa đăng nhập. Điều hướng về trang login."
+      ]
+    }
+  ],
+  "overflow_errors": [
+    {
+      "page": "frontend/index.html",
+      "viewport": "desktop_1280",
+      "width": 1280,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1280,
+        "innerWidth": 1280,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/index.html",
+      "viewport": "desktop_1024",
+      "width": 1024,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1024,
+        "innerWidth": 1024,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/index.html",
+      "viewport": "tablet_768",
+      "width": 768,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/index.html",
+      "viewport": "mobile_412",
+      "width": 412,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 412,
+        "innerWidth": 412,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/index.html",
+      "viewport": "mobile_375",
+      "width": 375,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "viewport": "desktop_1280",
+      "width": 1280,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1280,
+        "innerWidth": 1280,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "viewport": "desktop_1024",
+      "width": 1024,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1024,
+        "innerWidth": 1024,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "viewport": "tablet_768",
+      "width": 768,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "viewport": "mobile_412",
+      "width": 412,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 412,
+        "innerWidth": 412,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/jobs.html",
+      "viewport": "mobile_375",
+      "width": 375,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "viewport": "desktop_1280",
+      "width": 1280,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1280,
+        "innerWidth": 1280,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "viewport": "desktop_1024",
+      "width": 1024,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 1024,
+        "innerWidth": 1024,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "viewport": "tablet_768",
+      "width": 768,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "viewport": "mobile_412",
+      "width": 412,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 412,
+        "innerWidth": 412,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "page": "frontend/pages/candidate/cvs.html",
+      "viewport": "mobile_375",
+      "width": 375,
+      "overflow": {
+        "hasOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375,
+        "overflowDiff": 0
+      },
+      "status": "PASS"
+    }
+  ],
+  "form_validations": [
+    {
+      "form": "login.html",
+      "case": "submit_empty",
+      "native_validity_blocked": true,
+      "status": "PASS"
+    }
+  ],
+  "keyboard_navigation": [
+    {
+      "page": "index.html",
+      "test": "tab_navigation",
+      "active_element": "BUTTON",
+      "status": "PASS"
+    }
+  ],
+  "summary": {}
+}

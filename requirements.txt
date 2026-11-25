@@ -5,3 +5,19 @@ PyMySQL==1.1.1
 # cryptography: bắt buộc để PyMySQL đăng nhập được MySQL 8 (caching_sha2_password)
 cryptography==43.0.3
 pydantic-settings==2.6.1
+
+# File upload & image processing support
+python-multipart==0.0.33
+pillow>=10.0.0
+# MIME type detection (python-magic-bin for Windows compatibility)
+python-magic-bin==0.4.14
+
+# bcrypt: hash mật khẩu người dùng (xem sql/init.sql)
+bcrypt==4.2.0
+# python-jose: tạo và xác thực JWT
+python-jose[cryptography]==3.3.0
+python-dotenv>=1.0.0
+
+# Kiểm thử tự động
+pytest>=8.0.0
+httpx>=0.27.0

@@ -1,0 +1,317 @@
+{
+  "4.1_fuzz_testing": {
+    "total_fuzz_cases": 26,
+    "any_500_returned": false,
+    "fuzz_results_sample": [
+      {
+        "method": "POST",
+        "url": "/api/auth/login",
+        "payload_type": "invalid_login",
+        "status": 401,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "empty_body",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "empty_array",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "huge_string_10k",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "unicode_emoji_null",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "negative_numbers",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "float_instead_of_int",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "overflow_int",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/jobs",
+        "payload_type": "type_mismatch_str_as_bool",
+        "status": 422,
+        "is_500": false,
+        "has_error_detail": true
+      },
+      {
+        "method": "POST",
+        "url": "/api/candidate/applications",
+        "payload_type": "empty_body",
+        "status": 405,
+        "is_500": false,
+        "has_error_detail": true
+      }
+    ]
+  },
+  "4.2_schema_vs_frontend": {
+    "total_endpoints_verified": 3,
+    "all_passed": false,
+    "details": [
+      {
+        "endpoint": "GET /api/jobs",
+        "frontend_expected_keys": [
+          "id",
+          "title",
+          "company_name",
+          "salary_min",
+          "salary_max",
+          "location",
+          "created_at"
+        ],
+        "present_in_backend": [
+          "id",
+          "title",
+          "company_id",
+          "company_slug",
+          "company_name",
+          "company_logo",
+          "company_logo_2x",
+          "location",
+          "location_slug",
+          "level",
+          "level_slug",
+          "work_type",
+          "work_type_slug",
+          "category",
+          "category_slug",
+          "salary_min",
+          "salary_max",
+          "is_salary_negotiable",
+          "skills",
+          "published_at",
+          "created_at",
+          "is_saved",
+          "is_expired",
+          "deadline",
+          "match_score",
+          "matched_skills",
+          "missing_skills",
+          "match_reason",
+          "salary_insight",
+          "salary_insight_sample_size"
+        ],
+        "missing_or_mismatched": [],
+        "status": "PASS"
+      },
+      {
+        "endpoint": "GET /api/jobs/1",
+        "frontend_expected_keys": [
+          "id",
+          "title",
+          "description",
+          "requirements",
+          "company_id",
+          "status"
+        ],
+        "present_in_backend": [
+          "id",
+          "title",
+          "company_id",
+          "company_slug",
+          "company_name",
+          "company_logo",
+          "location",
+          "type",
+          "work_type",
+          "employment_type"
+        ],
+        "missing_or_mismatched": [
+          "status"
+        ],
+        "status": "FAIL"
+      },
+      {
+        "endpoint": "GET /api/companies",
+        "frontend_expected_keys": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "present_in_backend": [
+          "slug",
+          "name",
+          "logo_url",
+          "logo_url_2x",
+          "industry",
+          "location",
+          "size_range",
+          "is_verified",
+          "open_jobs",
+          "salary",
+          "top_skills",
+          "latest_job_at"
+        ],
+        "missing_or_mismatched": [
+          "id"
+        ],
+        "status": "FAIL"
+      }
+    ]
+  },
+  "4.3_pagination_boundaries": {
+    "results": [
+      {
+        "case": "page_zero",
+        "url": "/api/jobs?page=0",
+        "status_code": 422,
+        "items_returned": 0,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_negative",
+        "url": "/api/jobs?page=-1",
+        "status_code": 422,
+        "items_returned": 0,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_huge",
+        "url": "/api/jobs?page=999999",
+        "status_code": 200,
+        "items_returned": 6,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_alpha",
+        "url": "/api/jobs?page=abc",
+        "status_code": 422,
+        "items_returned": 0,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_size_zero",
+        "url": "/api/jobs?limit=0",
+        "status_code": 200,
+        "items_returned": 10,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_size_negative",
+        "url": "/api/jobs?limit=-1",
+        "status_code": 200,
+        "items_returned": 10,
+        "is_safe": true,
+        "is_500": false
+      },
+      {
+        "case": "page_size_10000",
+        "url": "/api/jobs?limit=10000",
+        "status_code": 200,
+        "items_returned": 10,
+        "is_safe": true,
+        "is_500": false
+      }
+    ],
+    "has_500_error": false
+  },
+  "4.4_timezone_audit": {
+    "db_raw_datetime": "2026-11-18 21:26:31",
+    "api_response_datetime": "2026-11-18T21:26:31",
+    "is_iso_format": true,
+    "assessment": "Backend serializes to ISO format with T separator"
+  },
+  "4.5_n_plus_one_and_indexes": {
+    "queries_for_limit_5": 7,
+    "queries_for_limit_20": 7,
+    "n_plus_one_detected": false,
+    "explain_jobs_search": [
+      {
+        "table": "j",
+        "type": "ref",
+        "key": "idx_jobs_status",
+        "rows": 126,
+        "extra": 126
+      }
+    ]
+  },
+  "4.6_concurrency_and_idempotency": {
+    "double_submit": {
+      "responses": [
+        [
+          403,
+          {
+            "detail": "CV này không thuộc về bạn. Bạn chỉ có thể sử dụng CV của chính mình để nộp đơn."
+          }
+        ],
+        [
+          403,
+          {
+            "detail": "CV này không thuộc về bạn. Bạn chỉ có thể sử dụng CV của chính mình để nộp đơn."
+          }
+        ]
+      ],
+      "codes": [
+        403,
+        403
+      ],
+      "idempotent_protected": true
+    },
+    "admin_concurrent_action": {
+      "job_id": 1,
+      "codes": [
+        422,
+        422
+      ],
+      "safe": true
+    }
+  },
+  "4.7_infrastructure_faults": {
+    "missing_cv_file": {
+      "status_code": 404,
+      "handled_gracefully": true,
+      "no_500": true
+    },
+    "missing_logo_file": {
+      "status_code": 404,
+      "handled_gracefully": true,
+      "no_500": true
+    }
+  }
+}

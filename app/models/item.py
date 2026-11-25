@@ -5,6 +5,7 @@ Khi làm đề tài, copy file này để tạo bảng của nhóm (vd: Product,
 from datetime import datetime
 from decimal import Decimal
 
+
 from sqlalchemy import DateTime, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,3 +23,6 @@ class Item(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+
